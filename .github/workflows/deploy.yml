@@ -1,66 +1,79 @@
 name: Deploy AIBAY
 
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  on:
+    push:
+      branches: [main]
+    workflow_dispatch:
 
-env:
-  NODE_VERSION: '20'
-  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-  PLAYWRIGHT_BROWSERS_PATH: '0'
+  env:
+    NODE_VERSION: '20'
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    PLAYWRIGHT_BROWSERS_PATH: '0'
 
-jobs:
-  build-and-deploy:
-    name: Build & Deploy Frontend
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  jobs:
+    deploy-gh-pages:
+      name: Deploy to GitHub Pages
+      runs-on: ubuntu-latest
+      permissions:
+        contents: write
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+            cache: 'npm'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+        - name: Install dependencies
+          run: npm install --include=dev --legacy-peer-deps
 
-      - name: Install dependencies
-        run: npm install --include=dev --legacy-peer-deps
+        - name: Build for GitHub Pages
+          env:
+            NODE_ENV: production
+            VITE_API_URL: https://aibay-3gql.onrender.com
+            VITE_BASE_PATH: /AiBay/
+          run: npm run build
 
-      - name: Build frontend (GitHub Pages)
-        env:
-          NODE_ENV: production
-          VITE_API_URL: https://aibay-3gql.onrender.com
-          VITE_BASE_PATH: /AiBay/
-        run: npm run build
+        - name: Add 404.html for SPA routing
+          run: cp dist/public/index.html dist/public/404.html
 
-      - name: Add 404.html for SPA routing
-        run: cp dist/public/index.html dist/public/404.html
+        - name: Deploy to GitHub Pages
+          uses: peaceiris/actions-gh-pages@v4
+          with:
+            github_token: ${{ secrets.GITHUB_TOKEN }}
+            publish_dir: ./dist/public
+            publish_branch: gh-pages
+            force_orphan: true
+            commit_message: 'deploy(gh-pages): ${{ github.sha }}'
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist/public
-          publish_branch: gh-pages
-          force_orphan: true
-          commit_message: 'deploy(gh-pages): ${{ github.sha }}'
+    deploy-cf-pages:
+      name: Deploy to Cloudflare Pages
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
 
-      - name: Rebuild frontend (Cloudflare Pages - base path /)
-        env:
-          NODE_ENV: production
-          VITE_API_URL: https://aibay-3gql.onrender.com
-          VITE_BASE_PATH: /
-        run: npm run build
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+            cache: 'npm'
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: aibay
-          directory: dist/public
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        - name: Install dependencies
+          run: npm install --include=dev --legacy-peer-deps
+
+        - name: Build for Cloudflare Pages
+          env:
+            NODE_ENV: production
+            VITE_API_URL: https://aibay-3gql.onrender.com
+            VITE_BASE_PATH: /
+          run: npm run build
+
+        - name: Deploy via Wrangler
+          run: npx wrangler@3 pages deploy dist/public --project-name=aibay --branch=main --commit-dirty=true
+          env:
+            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+            CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  
