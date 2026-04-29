@@ -59,7 +59,7 @@ jobs:
           retention-days: 1
 
   deploy-pages:
-    name: Deploy → GitHub Pages
+    name: Deploy to GitHub Pages
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -82,7 +82,7 @@ jobs:
           commit_message: 'deploy: ${{ needs.build.outputs.frontend_hash }}'
 
   deploy-render:
-    name: Deploy → Render (pre-built)
+    name: Deploy to Render (pre-built)
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -119,6 +119,11 @@ jobs:
           git push origin HEAD:render-deploy --force
 
       - name: Notify Render via Deploy Hook
-        if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
-          curl -s --fail "${{ secrets.RENDER_DEPLOY_HOOK }}" && echo "Render deploy triggered."
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then
+            curl -s --fail "$RENDER_DEPLOY_HOOK" && echo "Render deploy triggered."
+          else
+            echo "No RENDER_DEPLOY_HOOK secret set, skipping."
+          fi
