@@ -51,7 +51,7 @@ export interface ScrapedProduct {
   sourceUrl: string;
 }
 
-type Platform = "aliexpress" | "amazon" | "temu" | "cjdropshipping" | "generic";
+type Platform = "aliexpress" | "amazon" | "temu" | "cjdropshipping" | "ebay" | "generic";
 
 export function detectPlatform(url: string): Platform {
   const lower = url.toLowerCase();
@@ -59,7 +59,74 @@ export function detectPlatform(url: string): Platform {
   if (lower.includes("amazon.com") || lower.includes("amazon.co.uk") || lower.includes("amazon.de") || lower.includes("amazon.ca")) return "amazon";
   if (lower.includes("temu.com")) return "temu";
   if (lower.includes("cjdropshipping.com") || lower.includes("cjdrop.com")) return "cjdropshipping";
+  if (lower.includes("ebay.com") || lower.includes("ebay.co.uk") || lower.includes("ebay.com.au") || lower.includes("ebay.de")) return "ebay";
   return "generic";
+}
+
+function extractEbayItemId(url: string): string | null {
+  const m = url.match(/\/itm\/(?:[^/]*?-)?(\d{6,14})/i) || url.match(/[?&]item=(\d+)/i) || url.match(/\/(\d{10,14})(?:[?#]|$)/);
+  return m?.[1] ?? null;
+}
+
+async function scrapeEbayItem(url: string): Promise<ScrapedProduct> {
+  const itemId = extractEbayItemId(url);
+  if (!itemId) throw new Error("Could not extract eBay item ID from URL");
+
+  const appId = process.env.EBAY_APP_ID;
+  if (!appId) throw new Error("EBAY_APP_ID not configured — cannot fetch eBay listing data");
+
+  const params = new URLSearchParams({
+    callname: "GetSingleItem",
+    responseencoding: "JSON",
+    appid: appId,
+    siteid: "0",
+    version: "967",
+    ItemID: itemId,
+    IncludeSelector: "Details,ItemSpecifics,Description,ShippingCosts,Variations,TextDescription",
+  });
+
+  const res = await axios.get(`https://open.api.ebay.com/shopping?${params.toString()}`, {
+    timeout: 15000,
+    headers: { "User-Agent": "AIBAY/1.0" },
+  });
+
+  const d = res.data?.Item;
+  if (!d || res.data?.Ack === "Failure") {
+    const errs = (res.data?.Errors || []).map((e: any) => e.ShortMessage).join("; ");
+    throw new Error(`eBay API error: ${errs || "item not found"}`);
+  }
+
+  const specs: Record<string, string> = {};
+  const nameValueList = d.ItemSpecifics?.NameValueList;
+  if (Array.isArray(nameValueList)) {
+    for (const nv of nameValueList) {
+      const name = nv.Name as string;
+      const values = Array.isArray(nv.Value) ? nv.Value : [nv.Value];
+      specs[name] = values.filter(Boolean).join(", ");
+    }
+  }
+
+  const galleryUrls: string[] = [];
+  if (d.PictureURL) {
+    const pics = Array.isArray(d.PictureURL) ? d.PictureURL : [d.PictureURL];
+    galleryUrls.push(...pics.filter(Boolean).slice(0, 12));
+  }
+
+  const rawDescription = (d.Description || d.ConvertedCurrentPrice?.Description || "");
+  const $ = cheerio.load(rawDescription);
+  const cleanDesc = $.text().replace(/\s+/g, " ").trim().slice(0, 5000);
+
+  return {
+    title: d.Title || "",
+    description: cleanDesc || `${d.Title} — condition: ${d.ConditionDisplayName || "Not specified"}`,
+    images: galleryUrls,
+    specifications: specs,
+    price: parseFloat(d.ConvertedCurrentPrice?.Value || d.CurrentPrice?.Value || "0"),
+    brand: specs["Brand"] || specs["Marke"] || undefined,
+    categoryBreadcrumb: d.PrimaryCategoryName || undefined,
+    platform: "ebay",
+    sourceUrl: url,
+  };
 }
 
 const USER_AGENTS = [
@@ -663,11 +730,14 @@ export async function scrapeProductFromUrl(url: string): Promise<ScrapedProduct>
     case "cjdropshipping":
       scrapers.push(() => httpScrapeCJ(url));
       break;
+    case "ebay":
+      scrapers.push(() => scrapeEbayItem(url));
+      break;
     default:
       scrapers.push(() => httpScrapeGeneric(url));
   }
-  // Always add generic fallback
-  scrapers.push(() => httpScrapeGeneric(url));
+  // Always add generic fallback (not for eBay — API is definitive)
+  if (platform !== "ebay") scrapers.push(() => httpScrapeGeneric(url));
 
   let lastErr: any;
   for (const scraper of scrapers) {
