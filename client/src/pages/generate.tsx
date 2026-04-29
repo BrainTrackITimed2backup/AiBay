@@ -62,10 +62,11 @@ interface PlatformInfo {
 
 function detectPlatformInfo(url: string): PlatformInfo | null {
   const lower = url.toLowerCase();
-  if (lower.includes("aliexpress.com")) return { name: "AliExpress", icon: "🌐", badgeClass: "bg-orange-500/10 text-orange-600 border-orange-500/30" };
+  if (lower.includes("aliexpress.com") || lower.includes("aliexpress.us")) return { name: "AliExpress", icon: "🌐", badgeClass: "bg-orange-500/10 text-orange-600 border-orange-500/30" };
   if (lower.includes("amazon.")) return { name: "Amazon", icon: "🛒", badgeClass: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30" };
   if (lower.includes("temu.com")) return { name: "Temu", icon: "🎯", badgeClass: "bg-orange-600/10 text-orange-700 border-orange-600/30" };
   if (lower.includes("cjdropshipping.com") || lower.includes("cjdrop.com")) return { name: "CJ Dropshipping", icon: "📦", badgeClass: "bg-blue-500/10 text-blue-600 border-blue-500/30" };
+  if (lower.includes("ebay.com") || lower.includes("ebay.co.uk") || lower.includes("ebay.com.au") || lower.includes("ebay.de")) return { name: "eBay Listing", icon: "🏷️", badgeClass: "bg-blue-600/10 text-blue-700 border-blue-600/30 dark:text-blue-400" };
   if (lower.startsWith("http")) return { name: "Generic Product Page", icon: "🔗", badgeClass: "bg-secondary text-muted-foreground border-border" };
   return null;
 }
@@ -530,7 +531,7 @@ export default function GeneratePage() {
                             <Input
                               id="product-url"
                               data-testid="input-product-url"
-                              placeholder="https://www.amazon.com/dp/B09XY1234"
+                              placeholder="Paste eBay, AliExpress, Amazon, Temu or CJ link…"
                               value={url}
                               onChange={e => setUrl(e.target.value)}
                               className="pr-12"
@@ -542,11 +543,17 @@ export default function GeneratePage() {
                             )}
                           </div>
                           <AnimatePresence>
-                            {platform && url.startsWith("http") && (
+                            {platform && url.startsWith("http") ? (
                               <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                                 <Badge variant="outline" className={cn("text-xs gap-1", platform.badgeClass)}>
                                   {platform.icon} {platform.name} detected
                                 </Badge>
+                              </motion.div>
+                            ) : !url && (
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                <p className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2 gap-y-1">
+                                  Supported: <span className="font-medium text-foreground/70">🏷️ eBay</span> · <span className="font-medium text-foreground/70">🌐 AliExpress</span> · <span className="font-medium text-foreground/70">🛒 Amazon</span> · <span className="font-medium text-foreground/70">🎯 Temu</span> · <span className="font-medium text-foreground/70">📦 CJ Drop</span>
+                                </p>
                               </motion.div>
                             )}
                           </AnimatePresence>
