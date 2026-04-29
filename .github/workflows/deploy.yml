@@ -11,8 +11,8 @@ env:
   PLAYWRIGHT_BROWSERS_PATH: '0'
 
 jobs:
-  deploy-pages:
-    name: Build & Deploy to GitHub Pages
+  build-and-deploy:
+    name: Build & Deploy Frontend
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -28,16 +28,16 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --include=dev --legacy-peer-deps
 
-      - name: Build frontend
+      - name: Build frontend (GitHub Pages)
         env:
           NODE_ENV: production
           VITE_API_URL: https://aibay-3gql.onrender.com
           VITE_BASE_PATH: /AiBay/
         run: npm run build
 
-      - name: Add 404.html for SPA deep-link routing
+      - name: Add 404.html for SPA routing
         run: cp dist/public/index.html dist/public/404.html
 
       - name: Deploy to GitHub Pages
@@ -47,4 +47,20 @@ jobs:
           publish_dir: ./dist/public
           publish_branch: gh-pages
           force_orphan: true
-          commit_message: 'deploy: ${{ github.sha }}'
+          commit_message: 'deploy(gh-pages): ${{ github.sha }}'
+
+      - name: Rebuild frontend (Cloudflare Pages - base path /)
+        env:
+          NODE_ENV: production
+          VITE_API_URL: https://aibay-3gql.onrender.com
+          VITE_BASE_PATH: /
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: aibay
+          directory: dist/public
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
