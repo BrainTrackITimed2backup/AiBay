@@ -11,11 +11,11 @@ env:
   PLAYWRIGHT_BROWSERS_PATH: '0'
 
 jobs:
-  build:
-    name: Build
+  deploy-pages:
+    name: Build & Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    outputs:
-      frontend_hash: ${{ steps.hash.outputs.hash }}
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -30,47 +30,15 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build (frontend + backend)
+      - name: Build frontend
         env:
           NODE_ENV: production
-          VITE_API_URL: https://aibay-zpsa.onrender.com
+          VITE_API_URL: https://aibay-3gql.onrender.com
           VITE_BASE_PATH: /AiBay/
         run: npm run build
 
       - name: Add 404.html for SPA deep-link routing
         run: cp dist/public/index.html dist/public/404.html
-
-      - name: Output build hash
-        id: hash
-        run: echo "hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist/public
-          retention-days: 1
-
-      - name: Upload backend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-dist
-          path: dist/index.cjs
-          retention-days: 1
-
-  deploy-pages:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download frontend artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist/public
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
@@ -79,51 +47,4 @@ jobs:
           publish_dir: ./dist/public
           publish_branch: gh-pages
           force_orphan: true
-          commit_message: 'deploy: ${{ needs.build.outputs.frontend_hash }}'
-
-  deploy-render:
-    name: Deploy to Render (pre-built)
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download backend artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-dist
-          path: dist
-
-      - name: Push pre-built backend to render-deploy branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git fetch origin render-deploy 2>/dev/null || true
-          git checkout --orphan render-deploy-new
-          git rm -rf . --quiet || true
-
-          mkdir -p dist
-          mv dist/index.cjs dist/index.cjs 2>/dev/null || true
-
-          cat > package.json << 'EOF'
-          { "name": "aibay-backend", "version": "1.0.0", "scripts": { "start": "node dist/index.cjs" } }
-          EOF
-
-          git add dist/index.cjs package.json
-          git commit -m "deploy: pre-built backend ${{ needs.build.outputs.frontend_hash }}"
-          git push origin HEAD:render-deploy --force
-
-      - name: Notify Render via Deploy Hook
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: |
-          if [ -n "$RENDER_DEPLOY_HOOK" ]; then
-            curl -s --fail "$RENDER_DEPLOY_HOOK" && echo "Render deploy triggered."
-          else
-            echo "No RENDER_DEPLOY_HOOK secret set, skipping."
-          fi
+          commit_message: 'deploy: ${{ github.sha }}'
