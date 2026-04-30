@@ -11,7 +11,7 @@ import {
   DollarSign, Clock, RefreshCw, ArrowUp, ArrowDown, Minus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, buildApiUrl } from "@/lib/queryClient";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +108,7 @@ export default function TrendingPage() {
     queryFn: async () => {
       const p = new URLSearchParams({ marketplace, sortMode, timeRange });
       if (categoryId && categoryId !== "all") p.set("categoryId", categoryId);
-      const res = await fetch(`/api/ebay/trending?${p}`);
+      const res = await fetch(buildApiUrl(`/api/ebay/trending?${p}`));
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },

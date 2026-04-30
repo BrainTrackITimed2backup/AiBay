@@ -13,6 +13,7 @@ import {
   ShoppingBag, Globe, Calculator, Download, Smartphone
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { buildApiUrl } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 interface Stats {
@@ -113,7 +114,7 @@ function QuickAnalyzer() {
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ["/api/ebay/search", query],
     queryFn: async () => {
-      const res = await fetch(`/api/ebay/search?keyword=${encodeURIComponent(query!)}`);
+      const res = await fetch(buildApiUrl(`/api/ebay/search?keyword=${encodeURIComponent(query!)}`));
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },
@@ -211,7 +212,7 @@ export default function Dashboard() {
   const { data: hotData } = useQuery<{ items: any[] }>({
     queryKey: ["/api/ebay/trending", "all", "EBAY-US"],
     queryFn: async () => {
-      const res = await fetch("/api/ebay/trending?marketplace=EBAY-US");
+      const res = await fetch(buildApiUrl("/api/ebay/trending?marketplace=EBAY-US"));
       if (!res.ok) return { items: [] };
       return res.json();
     },

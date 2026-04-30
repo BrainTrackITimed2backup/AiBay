@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl, type GenerateRequest } from "@shared/routes";
+import { buildApiUrl } from "@/lib/queryClient";
 
 export function useListings() {
   return useQuery({
     queryKey: [api.listings.list.path],
     queryFn: async () => {
-      const res = await fetch(api.listings.list.path);
+      const res = await fetch(buildApiUrl(api.listings.list.path));
       if (!res.ok) throw new Error("Failed to fetch listings");
       const data = await res.json();
       return api.listings.list.responses[200].parse(data);
@@ -20,7 +21,7 @@ export function useListing(id: number | null) {
     queryFn: async () => {
       if (!id) throw new Error("ID is required");
       const url = buildUrl(api.listings.get.path, { id });
-      const res = await fetch(url);
+      const res = await fetch(buildApiUrl(url));
       if (!res.ok) throw new Error("Failed to fetch listing");
       const data = await res.json();
       return api.listings.get.responses[200].parse(data);
@@ -35,7 +36,7 @@ export function useGenerateListing() {
       // Validate input before sending
       const validated = api.listings.generate.input.parse(data);
       
-      const res = await fetch(api.listings.generate.path, {
+      const res = await fetch(buildApiUrl(api.listings.generate.path), {
         method: api.listings.generate.method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validated),

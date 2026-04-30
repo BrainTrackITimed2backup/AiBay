@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, buildApiUrl } from "@/lib/queryClient";
 import { useLocation, useSearch } from "wouter";
 import {
   Zap, Loader2, ExternalLink, Sparkles, Globe, Cpu, FileText, Image,
@@ -133,7 +133,7 @@ interface BulkJobData {
 function BulkProgress({ jobId, onDone, onRetry }: { jobId: number; onDone: (r: BulkJobData) => void; onRetry: (failedUrls: string[]) => void }) {
   const { data: job } = useQuery<BulkJobData>({
     queryKey: ["/api/optimize/bulk", jobId],
-    queryFn: () => fetch(`/api/optimize/bulk/${jobId}`).then(r => r.json()),
+    queryFn: () => fetch(buildApiUrl(`/api/optimize/bulk/${jobId}`)).then(r => r.json()),
     refetchInterval: (q) => {
       const d = q.state.data as BulkJobData | undefined;
       if (!d || d.status === "done" || d.status === "failed") return false;

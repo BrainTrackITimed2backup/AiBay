@@ -13,7 +13,7 @@ import {
   PlusCircle, Columns3, X, ChevronLeft, ChevronRight, TrendingUp
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, buildApiUrl } from "@/lib/queryClient";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +108,7 @@ export default function TopSellers() {
   const { data: profile, isLoading: loadingProfile, error: profileError } = useQuery<SellerProfile>({
     queryKey: ["/api/ebay/seller", searchedSeller],
     queryFn: async () => {
-      const res = await fetch(`/api/ebay/seller/${searchedSeller}`);
+      const res = await fetch(buildApiUrl(`/api/ebay/seller/${searchedSeller}`));
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },
@@ -119,7 +119,7 @@ export default function TopSellers() {
   const { data: listingsData, isLoading: loadingListings } = useQuery<{ items: SellerListing[]; totalPages: number; page: number }>({
     queryKey: ["/api/ebay/seller", searchedSeller, "listings", listingsPage],
     queryFn: async () => {
-      const res = await fetch(`/api/ebay/seller/${searchedSeller}/listings?page=${listingsPage}`);
+      const res = await fetch(buildApiUrl(`/api/ebay/seller/${searchedSeller}/listings?page=${listingsPage}`));
       if (!res.ok) throw new Error("Failed to load listings");
       return res.json();
     },
