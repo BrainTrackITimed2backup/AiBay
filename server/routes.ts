@@ -1265,6 +1265,73 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Admin Settings / SaaS Plans ──────────────────────────────────────────
+  const adminSettingsSchema = z.object({
+    siteName: z.string().min(1).max(100),
+    supportEmail: z.string().email(),
+    registrationEnabled: z.boolean(),
+    maintenanceMode: z.boolean(),
+    defaultTrialDays: z.number().int().min(0).max(365),
+    trialPriceUsd: z.string(),
+    enableWisePayments: z.boolean(),
+    featureFlags: z.record(z.boolean()),
+  });
+
+  const subscriptionPlanSchema = z.object({
+    name: z.string().min(1).max(100),
+    slug: z.string().min(1).max(100),
+    priceUsd: z.string(),
+    billingInterval: z.enum(["monthly", "quarterly", "semiannual", "annual", "lifetime"]),
+    trialDays: z.number().int().min(0).max(365),
+    isActive: z.boolean(),
+    features: z.array(z.string()).max(50),
+  });
+
+  app.get("/api/admin/settings", async (_req, res) => {
+    const settings = await storage.getAdminSettings();
+    res.json(settings || null);
+  });
+
+  app.patch("/api/admin/settings", async (req, res) => {
+    try {
+      const data = adminSettingsSchema.partial().parse(req.body);
+      const settings = await storage.upsertAdminSettings(data);
+      res.json(settings);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Error" });
+    }
+  });
+
+  app.get("/api/admin/plans", async (_req, res) => {
+    const plans = await storage.getSubscriptionPlans();
+    res.json(plans);
+  });
+
+  app.post("/api/admin/plans", async (req, res) => {
+    try {
+      const data = subscriptionPlanSchema.parse(req.body);
+      const plan = await storage.createSubscriptionPlan(data);
+      res.json(plan);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Error" });
+    }
+  });
+
+  app.put("/api/admin/plans/:id", async (req, res) => {
+    try {
+      const data = subscriptionPlanSchema.partial().parse(req.body);
+      const plan = await storage.updateSubscriptionPlan(Number(req.params.id), data);
+      res.json(plan);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Error" });
+    }
+  });
+
+  app.delete("/api/admin/plans/:id", async (req, res) => {
+    await storage.deleteSubscriptionPlan(Number(req.params.id));
+    res.json({ success: true });
+  });
+
   // ─── Watchlist Refresh ────────────────────────────────────────────────────
   app.post("/api/watchlist/:id/refresh", async (req, res) => {
     try {

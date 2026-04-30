@@ -53,6 +53,12 @@ interface TitleScore {
   alternatives: { title: string; score: number; changes: string[] }[];
 }
 
+interface LegacyTitleScore {
+  score?: number;
+  suggestions?: unknown;
+  improvedTitle?: string;
+}
+
 interface SourceData {
   platform?: string;
   price?: number;
@@ -78,6 +84,92 @@ function scoreBadgeClass(s: number) {
   return s >= 80 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
     : s >= 60 ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-700"
     : "border-red-500/30 bg-red-500/10 text-red-600";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function toItemSpecificArray(value: unknown): ItemSpecific[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is ItemSpecific => (
+    isRecord(entry) &&
+    typeof entry.name === "string" &&
+    typeof entry.value === "string" &&
+    (entry.source === "scraped" || entry.source === "ai")
+  ));
+}
+
+function toCategorySuggestionArray(value: unknown): CategorySuggestion[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is CategorySuggestion => (
+    isRecord(entry) &&
+    typeof entry.name === "string" &&
+    typeof entry.breadcrumb === "string" &&
+    typeof entry.categoryId === "string" &&
+    typeof entry.confidence === "number" &&
+    typeof entry.reason === "string"
+  ));
+}
+
+function normalizeTitleScore(value: unknown): TitleScore | null {
+  if (!isRecord(value)) return null;
+
+  if (
+    typeof value.overall === "number" &&
+    isRecord(value.dimensions) &&
+    Array.isArray(value.suggestions)
+  ) {
+    return {
+      overall: value.overall,
+      dimensions: {
+        lengthUtilization: typeof value.dimensions.lengthUtilization === "number" ? value.dimensions.lengthUtilization : 0,
+        keywordPlacement: typeof value.dimensions.keywordPlacement === "number" ? value.dimensions.keywordPlacement : 0,
+        specificity: typeof value.dimensions.specificity === "number" ? value.dimensions.specificity : 0,
+        brandInclusion: typeof value.dimensions.brandInclusion === "number" ? value.dimensions.brandInclusion : 0,
+        conditionClarity: typeof value.dimensions.conditionClarity === "number" ? value.dimensions.conditionClarity : 0,
+        forbiddenWords: typeof value.dimensions.forbiddenWords === "number" ? value.dimensions.forbiddenWords : 0,
+      },
+      suggestions: value.suggestions.filter((entry): entry is string => typeof entry === "string"),
+      alternatives: Array.isArray(value.alternatives)
+        ? value.alternatives
+            .filter((entry): entry is TitleScore["alternatives"][number] => (
+              isRecord(entry) &&
+              typeof entry.title === "string" &&
+              typeof entry.score === "number" &&
+              Array.isArray(entry.changes)
+            ))
+            .map((entry) => ({
+              title: entry.title,
+              score: entry.score,
+              changes: entry.changes.filter((change): change is string => typeof change === "string"),
+            }))
+        : [],
+    };
+  }
+
+  const legacy = value as LegacyTitleScore;
+  if (typeof legacy.score !== "number") return null;
+
+  const suggestions = Array.isArray(legacy.suggestions)
+    ? legacy.suggestions.filter((entry): entry is string => typeof entry === "string")
+    : [];
+
+  return {
+    overall: legacy.score,
+    dimensions: {
+      lengthUtilization: legacy.score,
+      keywordPlacement: legacy.score,
+      specificity: legacy.score,
+      brandInclusion: legacy.score,
+      conditionClarity: legacy.score,
+      forbiddenWords: legacy.score,
+    },
+    suggestions,
+    alternatives: typeof legacy.improvedTitle === "string" && legacy.improvedTitle.trim()
+      ? [{ title: legacy.improvedTitle, score: legacy.score, changes: ["Generated from legacy title optimization data"] }]
+      : [],
+  };
 }
 
 // ─── Before / After Image Slider ─────────────────────────────────────────────
@@ -915,13 +1007,32 @@ export default function ListingDetails() {
     );
   }
 
-  const titleScore = listing.titleScore as TitleScore | null;
-  const itemSpecifics = (listing.itemSpecifics as ItemSpecific[] | null) || [];
-  const categories = (listing.suggestedCategories as CategorySuggestion[] | null) || [];
-  const sourceData = listing.sourceData as SourceData | null;
+  const titleScore = normalizeTitleScore(listing.titleScore);
+  const itemSpecifics = toItemSpecificArray(listing.itemSpecifics);
+  const categories = toCategorySuggestionArray(listing.suggestedCategories);
+  const sourceData = isRecord(listing.sourceData) ? listing.sourceData as SourceData : null;
   const lifestylePrompts = sourceData?.lifestylePrompts || [];
-  const processedImagesMeta = (listing.processedImages as { original: string; processed: string; status: string }[] | null) || [];
-  const imageMetadataRaw = listing.imageMetadata as ImageMeta[] | null;
+  const processedImagesMeta = Array.isArray(listing.processedImages)
+    ? listing.processedImages.filter((entry): entry is { original: string; processed: string; status: string } => (
+        isRecord(entry) &&
+        typeof entry.original === "string" &&
+        typeof entry.processed === "string" &&
+        typeof entry.status === "string"
+      ))
+    : [];
+  const imageMetadataRaw = Array.isArray(listing.imageMetadata)
+    ? listing.imageMetadata.filter((entry): entry is ImageMeta => (
+        isRecord(entry) &&
+        typeof entry.url === "string" &&
+        typeof entry.label === "string" &&
+        typeof entry.isHero === "boolean" &&
+        typeof entry.isExcluded === "boolean" &&
+        typeof entry.originalIndex === "number"
+      ))
+    : null;
+  const generatedTitle = listing.generatedTitle || "Untitled listing";
+  const generatedHtml = listing.generatedHtml || "";
+  const listingImages = Array.isArray(listing.images) ? listing.images : [];
 
   const platformLabel = sourceData?.platform
     ? sourceData.platform.charAt(0).toUpperCase() + sourceData.platform.slice(1)
@@ -937,10 +1048,10 @@ export default function ListingDetails() {
   };
 
   const optimizationScore: ListingOptimizationScore = computeListingScore({
-    title: listing.generatedTitle || "",
-    htmlDescription: listing.generatedHtml || "",
+    title: generatedTitle,
+    htmlDescription: generatedHtml,
     itemSpecifics: itemSpecifics.map(s => ({ name: s.name, value: s.value })),
-    imageCount: listing.images?.length || 0,
+    imageCount: listingImages.length,
   });
 
   const confColor: Record<string, string> = {
@@ -1023,7 +1134,7 @@ export default function ListingDetails() {
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <Badge variant={listing.generatedTitle.length <= 80 ? "outline" : "destructive"} className="text-xs">
-                      {listing.generatedTitle.length}/80 chars
+                      {generatedTitle.length}/80 chars
                     </Badge>
                     {titleScore && (
                       <Badge variant="outline" className={cn("text-xs", scoreBadgeClass(titleScore.overall))}>
@@ -1035,10 +1146,10 @@ export default function ListingDetails() {
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="bg-secondary/50 p-4 rounded-xl border border-border/50 font-medium text-lg leading-relaxed mb-3" data-testid="text-generated-title">
-                  {listing.generatedTitle}
+                  {generatedTitle}
                 </div>
                 <div className="flex items-center justify-between">
-                  <CopyButton text={listing.generatedTitle} label="Copy Title" data-testid="btn-copy-title" />
+                  <CopyButton text={generatedTitle} label="Copy Title" data-testid="btn-copy-title" />
                   <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => setMainTab("seo")}>
                     <BarChart3 className="w-3.5 h-3.5" /> View SEO Analysis
                   </Button>
@@ -1071,7 +1182,7 @@ export default function ListingDetails() {
             )}
 
             {/* Image preview grid (first 4) */}
-            {listing.images?.length > 0 && (
+            {listingImages.length > 0 && (
               <Card className="border-border/40">
                 <CardHeader className="pb-3 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary" /> Images Preview</CardTitle>
@@ -1081,7 +1192,7 @@ export default function ListingDetails() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-4 gap-2">
-                    {listing.images.slice(0, 4).map((img, i) => (
+                    {listingImages.slice(0, 4).map((img, i) => (
                       <div key={i} className="aspect-square bg-secondary rounded-lg overflow-hidden border border-border/30">
                         <img src={img} alt={`Product ${i + 1}`} className="w-full h-full object-cover" />
                       </div>
@@ -1096,7 +1207,7 @@ export default function ListingDetails() {
           <TabsContent value="images" className="mt-6 space-y-6">
             <ReplicateStatusBanner />
 
-            {listing.images?.length > 0 ? (
+            {listingImages.length > 0 ? (
               <div className="space-y-6">
                 {/* Action bar */}
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1133,12 +1244,12 @@ export default function ListingDetails() {
                 <Card className="border-border/40">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4 text-primary" /> Image Gallery ({listing.images.length} images)
+                      <ImageIcon className="w-4 h-4 text-primary" /> Image Gallery ({listingImages.length} images)
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {listing.images.map((img, i) => (
+                      {listingImages.map((img, i) => (
                         <ImageCard key={i} src={img} index={i} replicateConfigured={replicateConfigured} />
                       ))}
                     </div>
@@ -1156,7 +1267,7 @@ export default function ListingDetails() {
                   <CardContent>
                     <ImageMetadataEditor
                       listingId={listing.id}
-                      images={listing.images}
+                      images={listingImages}
                       existingMeta={imageMetadataRaw}
                     />
                   </CardContent>
@@ -1287,7 +1398,7 @@ export default function ListingDetails() {
                 </TabsContent>
                 <TabsContent value="preview" className="m-0">
                   <div className="p-6 min-h-[500px] max-h-[700px] overflow-y-auto bg-white">
-                    <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: listing.generatedHtml }} />
+                    <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: generatedHtml }} />
                   </div>
                 </TabsContent>
                 <TabsContent value="code" className="m-0">
@@ -1295,7 +1406,7 @@ export default function ListingDetails() {
                     readOnly
                     data-testid="textarea-html-code"
                     className="w-full h-[500px] p-6 font-mono text-sm bg-slate-950 text-slate-300 resize-none focus:outline-none"
-                    value={listing.generatedHtml}
+                    value={generatedHtml}
                   />
                 </TabsContent>
               </Tabs>

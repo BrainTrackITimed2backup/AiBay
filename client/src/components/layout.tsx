@@ -27,6 +27,7 @@ import {
   Flame,
   Target,
   Percent,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,10 @@ const TOOLS_NAV = [
 const LIBRARY_NAV = [
   { href: "/history", label: "History", icon: History },
   { href: "/watchlist", label: "Watchlist", icon: Bookmark },
+];
+
+const CONTROL_NAV = [
+  { href: "/admin", label: "Admin Panel", icon: Settings2 },
 ];
 
 interface NavGroupProps {
@@ -175,6 +180,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <NavGroup title="Research" items={RESEARCH_NAV} currentPath={location} defaultOpen={true} />
           <NavGroup title="Tools" items={TOOLS_NAV} currentPath={location} defaultOpen={true} />
           <NavGroup title="Library" items={LIBRARY_NAV} currentPath={location} defaultOpen={true} />
+          <NavGroup title="Control" items={CONTROL_NAV} currentPath={location} defaultOpen={true} />
         </nav>
 
         {/* Footer */}
