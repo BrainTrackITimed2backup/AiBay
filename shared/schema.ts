@@ -194,6 +194,55 @@ export const insertTemplateSchema = createInsertSchema(templates).omit({
 export type Template = typeof templates.$inferSelect;
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 
+// ─── Admin Settings ──────────────────────────────────────────────────────────
+export const adminSettings = pgTable("admin_settings", {
+  id: serial("id").primaryKey(),
+  siteName: text("site_name").notNull().default("AIBAY"),
+  supportEmail: text("support_email").notNull().default("support@aibay.app"),
+  registrationEnabled: boolean("registration_enabled").notNull().default(true),
+  maintenanceMode: boolean("maintenance_mode").notNull().default(false),
+  defaultTrialDays: integer("default_trial_days").notNull().default(14),
+  trialPriceUsd: numeric("trial_price_usd", { precision: 10, scale: 2 }).notNull().default("1.00"),
+  enableWisePayments: boolean("enable_wise_payments").notNull().default(false),
+  featureFlags: jsonb("feature_flags"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertAdminSettingsSchema = createInsertSchema(adminSettings).omit({
+  id: true,
+  updatedAt: true,
+}).extend({
+  featureFlags: z.record(z.boolean()).optional(),
+});
+
+export type AdminSettings = typeof adminSettings.$inferSelect;
+export type InsertAdminSettings = z.infer<typeof insertAdminSettingsSchema>;
+
+// ─── Subscription Plans ──────────────────────────────────────────────────────
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  priceUsd: numeric("price_usd", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  billingInterval: text("billing_interval").notNull().default("monthly"),
+  trialDays: integer("trial_days").notNull().default(14),
+  isActive: boolean("is_active").notNull().default(true),
+  features: jsonb("features"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
+  id: true,
+  updatedAt: true,
+  createdAt: true,
+}).extend({
+  features: z.array(z.string()).optional(),
+});
+
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+
 // ─── Request/Response Schemas ────────────────────────────────────────────────
 export const generateRequestSchema = z.object({
   productUrl: z.string().url("Must be a valid URL"),
