@@ -1,6 +1,11 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
+export function buildApiUrl(url: string): string {
+  if (!url.startsWith("/api/")) return url;
+  return API_BASE ? `${API_BASE}${url}` : url;
+}
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -14,7 +19,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const fullUrl = url.startsWith("/api/") ? `${API_BASE}${url}` : url;
+  const fullUrl = buildApiUrl(url);
   const res = await fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
@@ -33,7 +38,7 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const path = queryKey.join("/") as string;
-    const fullUrl = path.startsWith("/api/") ? `${API_BASE}${path}` : path;
+    const fullUrl = buildApiUrl(path);
     const res = await fetch(fullUrl, {
       credentials: "omit",
     });

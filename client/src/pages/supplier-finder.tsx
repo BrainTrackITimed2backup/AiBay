@@ -29,6 +29,7 @@ import {
   Calculator,
 } from "lucide-react";
 import { SiAmazon, SiAliexpress } from "react-icons/si";
+import { buildApiUrl } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 interface SupplierProduct {
@@ -514,7 +515,7 @@ export default function SupplierFinderPage() {
   } = useQuery<SupplierSearchResult>({
     queryKey: ["/api/supplier/search", searchKeyword],
     queryFn: async () => {
-      const res = await fetch(`/api/supplier/search?q=${encodeURIComponent(searchKeyword)}`);
+      const res = await fetch(buildApiUrl(`/api/supplier/search?q=${encodeURIComponent(searchKeyword)}`));
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Search failed" }));
         throw new Error(err.message || "Search failed");
@@ -528,7 +529,7 @@ export default function SupplierFinderPage() {
   const { data: ebayData, isLoading: ebayLoading } = useQuery<EbaySoldSummary>({
     queryKey: ["/api/ebay/sold-summary", searchKeyword],
     queryFn: async () => {
-      const res = await fetch(`/api/ebay/sold-summary?q=${encodeURIComponent(searchKeyword)}`);
+      const res = await fetch(buildApiUrl(`/api/ebay/sold-summary?q=${encodeURIComponent(searchKeyword)}`));
       if (!res.ok) throw new Error("Failed to fetch eBay sold data");
       return res.json();
     },

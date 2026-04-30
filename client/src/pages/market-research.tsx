@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, buildApiUrl } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -310,7 +310,7 @@ export default function MarketResearch() {
       const params = new URLSearchParams({ keyword: searchQuery.keyword, marketplace: searchQuery.marketplace });
       if (searchQuery.categoryId) params.set("categoryId", searchQuery.categoryId);
       if (searchQuery.timeRange) params.set("timeRange", searchQuery.timeRange);
-      const res = await fetch(`/api/ebay/search?${params}`);
+      const res = await fetch(buildApiUrl(`/api/ebay/search?${params}`));
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "Failed"); }
       return res.json();
     },

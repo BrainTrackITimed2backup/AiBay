@@ -14,7 +14,7 @@ import {
   CheckSquare, Square, BookmarkPlus, ThumbsUp, ThumbsDown, Minus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, buildApiUrl } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -122,7 +122,7 @@ export default function TurboScanner() {
         ...(scanParams.maxPrice && { maxPrice: scanParams.maxPrice }),
         ...(scanParams.condition && scanParams.condition !== "all" && { condition: scanParams.condition }),
       });
-      const res = await fetch(`/api/ebay/turbo-scan?${p}`);
+      const res = await fetch(buildApiUrl(`/api/ebay/turbo-scan?${p}`));
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { buildApiUrl } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 interface Category {
@@ -197,7 +198,7 @@ function CategoryCard({ category, onResearch }: { category: Category; onResearch
   }>({
     queryKey: ["/api/ebay/category", category.id, "stats"],
     queryFn: async () => {
-      const res = await fetch(`/api/ebay/category/${category.id}/stats`);
+      const res = await fetch(buildApiUrl(`/api/ebay/category/${category.id}/stats`));
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },

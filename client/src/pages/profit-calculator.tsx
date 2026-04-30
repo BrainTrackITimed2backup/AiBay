@@ -24,6 +24,7 @@ import {
   Globe,
   BarChart3,
 } from "lucide-react";
+import { buildApiUrl } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 const MARKETPLACES = [
@@ -131,7 +132,7 @@ export default function ProfitCalculatorPage() {
         marketplace: params.marketplace,
         international: String(params.international),
       });
-      const res = await fetch(`/api/profit/calculate?${qs}`);
+      const res = await fetch(buildApiUrl(`/api/profit/calculate?${qs}`));
       if (!res.ok) throw new Error("Failed to calculate");
       return res.json();
     },
