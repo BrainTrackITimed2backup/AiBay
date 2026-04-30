@@ -23,6 +23,7 @@ import TemplatesPage from "@/pages/templates";
 import VeroCheckerPage from "@/pages/vero-checker";
 import RoasCalculatorPage from "@/pages/roas-calculator";
 import AdSpyPage from "@/pages/ad-spy";
+import AiArenaPage from "@/pages/ai-arena";
 import NotFound from "@/pages/not-found";
 
 function ThemeInit() {
@@ -57,6 +58,7 @@ function Router() {
       <Route path="/vero-checker" component={VeroCheckerPage} />
       <Route path="/roas-calculator" component={RoasCalculatorPage} />
       <Route path="/ad-spy" component={AdSpyPage} />
+      <Route path="/ai-arena" component={AiArenaPage} />
       <Route component={NotFound} />
     </Switch>
   );

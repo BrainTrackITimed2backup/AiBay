@@ -1,6 +1,3 @@
-# AIBAY — eBay Market Intelligence Platform
-
-## Overview
 AIBAY is a premium eBay market intelligence and listing generation platform designed to surpass ZikAnalytics, AutoDS, and CJ Dropshipping. It provides real-time eBay data analysis, AI-powered listing generation, and comprehensive market research tools.
 
 ## Architecture
@@ -131,7 +128,7 @@ AIBAY is a premium eBay market intelligence and listing generation platform desi
 1. **Quick Analyzer** (Dashboard) — Inline market check with 4 key metrics + one-click next step actions
 2. **Smart 4-Step Workflow** (Dashboard) — Research → Source → Generate → Profit clickable guide
 3. **Hot Categories** (Dashboard) — 12 trending product categories always visible to guests; clicking navigates to Supplier Finder pre-filled
-4. **PWA / App Install** — AIBAY is installable on Android, iOS, Windows & Linux via browser "Add to Home Screen"; service worker enables offline access. SW uses **network-first** strategy for navigation (so new routes/builds always render) and is **disabled in dev/Replit preview** (auto-unregisters + clears caches) to prevent stale-bundle issues.
+4. **PWA / App Install** — AIBAY is installable on Android, iOS, Windows & Linux via browser "Add to Home Screen"; service worker enables offline access
 5. **Market Research** — Live STR, demand/competition/opportunity scores, price distribution histogram, profit calculator, export CSV
 6. **Turbo Scanner** — Category scan with proprietary AIBAY Worth Score™ (0–100), hot/good/OK badges, sort & filter
 7. **Trending Items** — eBay trending items by category

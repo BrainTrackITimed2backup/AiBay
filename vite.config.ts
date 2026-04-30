@@ -6,7 +6,7 @@ export default defineConfig(async () => {
   const isReplit = process.env.REPL_ID !== undefined;
   const isDev = process.env.NODE_ENV !== "production";
 
-  const plugins = [react()];
+  const plugins: any[] = [react()];
 
   if (isDev && isReplit) {
     const [{ default: runtimeErrorOverlay }, cartographerMod, devBannerMod] = await Promise.all([

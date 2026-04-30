@@ -42,6 +42,7 @@ const RESEARCH_NAV = [
 
 const TOOLS_NAV = [
   { href: "/generate", label: "Listing Generator", icon: Zap },
+  { href: "/ai-arena", label: "AI Model Arena", icon: Cpu },
   { href: "/vero-checker", label: "VERO Checker", icon: Shield },
   { href: "/roas-calculator", label: "ROAS Calculator", icon: Percent },
   { href: "/supplier", label: "Supplier Intelligence", icon: ShoppingBag },
