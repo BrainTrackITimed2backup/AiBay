@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, NextFunction, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
@@ -47,6 +47,16 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const getConfiguredAdminPassword = () =>
+    process.env.ADMIN_PASSWORD?.trim() || process.env.VITE_ADMIN_PASSWORD?.trim() || "Admin@Bay";
+
+  const requireAdminAccess = (req: Request, res: Response, next: NextFunction) => {
+    const password = req.header("x-admin-password")?.trim();
+    if (!password || password !== getConfiguredAdminPassword()) {
+      return res.status(401).json({ message: "Invalid admin password" });
+    }
+    next();
+  };
 
   // ─── Listing Generation ──────────────────────────────────────────────────────
   app.post(api.listings.generate.path, async (req, res) => {
@@ -1287,12 +1297,16 @@ export async function registerRoutes(
     features: z.array(z.string()).max(50),
   });
 
-  app.get("/api/admin/settings", async (_req, res) => {
+  app.post("/api/admin/verify", requireAdminAccess, (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  app.get("/api/admin/settings", requireAdminAccess, async (_req, res) => {
     const settings = await storage.getAdminSettings();
     res.json(settings || null);
   });
 
-  app.patch("/api/admin/settings", async (req, res) => {
+  app.patch("/api/admin/settings", requireAdminAccess, async (req, res) => {
     try {
       const data = adminSettingsSchema.partial().parse(req.body);
       const settings = await storage.upsertAdminSettings(data);
@@ -1302,12 +1316,12 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/plans", async (_req, res) => {
+  app.get("/api/admin/plans", requireAdminAccess, async (_req, res) => {
     const plans = await storage.getSubscriptionPlans();
     res.json(plans);
   });
 
-  app.post("/api/admin/plans", async (req, res) => {
+  app.post("/api/admin/plans", requireAdminAccess, async (req, res) => {
     try {
       const data = subscriptionPlanSchema.parse(req.body);
       const plan = await storage.createSubscriptionPlan(data);
@@ -1317,7 +1331,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/admin/plans/:id", async (req, res) => {
+  app.put("/api/admin/plans/:id", requireAdminAccess, async (req, res) => {
     try {
       const data = subscriptionPlanSchema.partial().parse(req.body);
       const plan = await storage.updateSubscriptionPlan(Number(req.params.id), data);
@@ -1327,7 +1341,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/admin/plans/:id", async (req, res) => {
+  app.delete("/api/admin/plans/:id", requireAdminAccess, async (req, res) => {
     await storage.deleteSubscriptionPlan(Number(req.params.id));
     res.json({ success: true });
   });

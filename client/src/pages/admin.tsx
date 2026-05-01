@@ -109,6 +109,7 @@ interface SettingsFormState {
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "Admin@Bay";
 const ADMIN_SESSION_KEY = "aibay-admin-unlocked";
+const ADMIN_PASSWORD_SESSION_KEY = "aibay-admin-password";
 
 const EMPTY_SETTINGS: SettingsFormState = {
   siteName: "AIBAY",
@@ -136,16 +137,28 @@ const EMPTY_PLAN: PlanDraft = {
   featuresText: "",
 };
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(buildApiUrl(url));
-  if (!res.ok) throw new Error(`Failed to load ${url}`);
+function getAdminHeaders(adminPassword?: string) {
+  return adminPassword ? { "x-admin-password": adminPassword } : undefined;
+}
+
+async function fetchJson<T>(url: string, adminPassword?: string): Promise<T> {
+  const res = await fetch(buildApiUrl(url), {
+    headers: getAdminHeaders(adminPassword),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: `Failed to load ${url}` }));
+    throw new Error(error.message || `Failed to load ${url}`);
+  }
   return res.json();
 }
 
-async function sendJson<T>(url: string, method: string, body: unknown): Promise<T> {
+async function sendJson<T>(url: string, method: string, body: unknown, adminPassword?: string): Promise<T> {
   const res = await fetch(buildApiUrl(url), {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(getAdminHeaders(adminPassword) || {}),
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -178,6 +191,7 @@ function normalizeFeatures(text: string): string[] {
 export default function AdminPage() {
   const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [error, setError] = useState("");
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>(EMPTY_SETTINGS);
@@ -185,7 +199,11 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && sessionStorage.getItem(ADMIN_SESSION_KEY) === "1") {
-      setUnlocked(true);
+      const savedPassword = sessionStorage.getItem(ADMIN_PASSWORD_SESSION_KEY);
+      if (savedPassword) {
+        setAdminPassword(savedPassword);
+        setUnlocked(true);
+      }
     }
   }, []);
 
@@ -228,13 +246,13 @@ export default function AdminPage() {
   const adminSettings = useQuery<AdminSettings | null>({
     queryKey: ["/api/admin/settings"],
     enabled: unlocked,
-    queryFn: () => fetchJson<AdminSettings | null>("/api/admin/settings"),
+    queryFn: () => fetchJson<AdminSettings | null>("/api/admin/settings", adminPassword),
   });
 
   const subscriptionPlans = useQuery<SubscriptionPlan[]>({
     queryKey: ["/api/admin/plans"],
     enabled: unlocked,
-    queryFn: () => fetchJson<SubscriptionPlan[]>("/api/admin/plans"),
+    queryFn: () => fetchJson<SubscriptionPlan[]>("/api/admin/plans", adminPassword),
   });
 
   useEffect(() => {
@@ -252,7 +270,7 @@ export default function AdminPage() {
   }, [adminSettings.data]);
 
   const saveSettings = useMutation({
-    mutationFn: async () => sendJson<AdminSettings>("/api/admin/settings", "PATCH", settingsForm),
+    mutationFn: async () => sendJson<AdminSettings>("/api/admin/settings", "PATCH", settingsForm, adminPassword),
     onSuccess: (data) => {
       queryClient.setQueryData(["/api/admin/settings"], data);
     },
@@ -271,9 +289,9 @@ export default function AdminPage() {
       };
 
       if (planDraft.id) {
-        return sendJson<SubscriptionPlan>(`/api/admin/plans/${planDraft.id}`, "PUT", payload);
+        return sendJson<SubscriptionPlan>(`/api/admin/plans/${planDraft.id}`, "PUT", payload, adminPassword);
       }
-      return sendJson<SubscriptionPlan>("/api/admin/plans", "POST", payload);
+      return sendJson<SubscriptionPlan>("/api/admin/plans", "POST", payload, adminPassword);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/plans"] });
@@ -283,7 +301,10 @@ export default function AdminPage() {
 
   const deletePlan = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(buildApiUrl(`/api/admin/plans/${id}`), { method: "DELETE" });
+      const res = await fetch(buildApiUrl(`/api/admin/plans/${id}`), {
+        method: "DELETE",
+        headers: getAdminHeaders(adminPassword),
+      });
       if (!res.ok) throw new Error("Failed to delete plan");
       return res.json();
     },
@@ -293,16 +314,43 @@ export default function AdminPage() {
     },
   });
 
-  function handleUnlock(e: React.FormEvent) {
+  useEffect(() => {
+    const authError = [adminSettings.error, subscriptionPlans.error, saveSettings.error, savePlan.error, deletePlan.error].find(
+      (value) => value instanceof Error && value.message === "Invalid admin password",
+    );
+
+    if (!authError || typeof window === "undefined") return;
+
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    sessionStorage.removeItem(ADMIN_PASSWORD_SESSION_KEY);
+    setAdminPassword("");
+    setUnlocked(false);
+    setError("Admin session expired. Enter the password again.");
+  }, [adminSettings.error, subscriptionPlans.error, saveSettings.error, savePlan.error, deletePlan.error]);
+
+  async function handleUnlock(e: React.FormEvent) {
     e.preventDefault();
-    if (password !== ADMIN_PASSWORD) {
-      setError("Invalid admin password");
+    const trimmedPassword = password.trim();
+    if (!trimmedPassword) {
+      setError("Enter admin password");
       return;
     }
-    sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
-    setUnlocked(true);
-    setError("");
-    setPassword("");
+
+    try {
+      await fetchJson<{ ok: true }>("/api/admin/verify", trimmedPassword);
+      sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+      sessionStorage.setItem(ADMIN_PASSWORD_SESSION_KEY, trimmedPassword);
+      setAdminPassword(trimmedPassword);
+      setUnlocked(true);
+      setError("");
+      setPassword("");
+    } catch (err) {
+      sessionStorage.removeItem(ADMIN_SESSION_KEY);
+      sessionStorage.removeItem(ADMIN_PASSWORD_SESSION_KEY);
+      setAdminPassword("");
+      setUnlocked(false);
+      setError(err instanceof Error ? err.message : "Invalid admin password");
+    }
   }
 
   function setFlag(name: string, value: boolean) {
