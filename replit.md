@@ -9,7 +9,7 @@ AIBAY is a premium eBay market intelligence and listing generation platform desi
 - **Frontend**: React + Vite, TanStack Query v5, wouter routing, shadcn/ui, Tailwind CSS, framer-motion
 - **Backend**: Cloudflare Worker API (Express-compatible runtime) + TypeScript
 - **Database**: Cloudflare D1 + Drizzle ORM
-- **AI**: Pollinations.AI (100% free, zero API key, zero registration) — GPT-4o, Claude Opus 4.7, DeepSeek V4 Flash/Pro, Gemini, Llama, Mistral via `https://gen.pollinations.ai/v1`
+- **AI**: Pollinations.AI via the authenticated unified API at `https://gen.pollinations.ai/v1`
 - **eBay Data**: eBay Finding API (via `EBAY_APP_ID` secret)
 
 ### Key Files
@@ -22,7 +22,7 @@ AIBAY is a premium eBay market intelligence and listing generation platform desi
 - `server/services/veroChecker.ts` — VERO brand protection checker (300+ brands database)
 - `server/services/platformScrapers.ts` — Platform-specific scrapers (AliExpress, Amazon, Temu, CJ Dropshipping, generic)
 - `server/services/scraper.ts` — Re-exports from platformScrapers for backward compatibility
-- `server/services/replicateService.ts` — Replicate API integration (upscale, remove-bg, lifestyle image SDXL)
+- `server/services/replicateService.ts` — Cloudflare image-AI service wrapper (Pollinations lifestyle generation plus honest capability gating for unsupported edits)
 - `server/services/imageProcessor.ts` — Image extraction/processing
 - `client/src/components/layout.tsx` — AIBAY sidebar navigation layout
 - `client/src/App.tsx` — Route registrations
@@ -48,7 +48,7 @@ AIBAY is a premium eBay market intelligence and listing generation platform desi
 | `/listing/:id` | Listing Details | Multi-tab result: Overview, Image AI, Item Specifics, Categories, Description, SEO Score |
 | `/vero-checker` | VERO Brand Checker | 300+ brand database, single + bulk check, risk levels, safe keyword alternatives |
 | `/roas-calculator` | ROAS & Profit Calculator | Interactive sliders, all eBay fees by category, monthly projection, break-even |
-| `/ad-spy` | Social Trend Spy | TikTok/Instagram/YouTube/Facebook viral products with WIN Score, find on eBay, generate listing |
+| `/ad-spy` | Social Trend Spy | Honest placeholder until a real social ingestion source is connected |
 
 ### API Endpoints
 - `GET /api/ebay/status` — Check if EBAY_APP_ID is configured
@@ -101,20 +101,19 @@ AIBAY is a premium eBay market intelligence and listing generation platform desi
 - `CLOUDFLARE_D1_DATABASE_ID` — Cloudflare D1 database ID
 - `CLOUDFLARE_API_TOKEN` — Cloudflare API token for Wrangler/Drizzle D1 access
 - `EBAY_APP_ID` — eBay Developer App ID (required for live eBay data)
-- `OPENROUTER_API_KEY` — OpenRouter API key for AI features (also powers AI Arena free models)
 - `ADMIN_PASSWORD` — Admin dashboard password
-- `REPLICATE_API_TOKEN` — Replicate API for image upscaling/generation
+- `POLLINATIONS_API_KEY` — Pollinations API key for text and image generation
 
 ## AI Model Arena (LMArena-style)
 - **Page**: `/ai-arena`
 - **API**: `POST /api/arena/compare` — run multiple models in parallel
-- **API**: `POST /api/arena/auto` — full auto: scrape → best free models → pick winner
+- **API**: `POST /api/arena/auto` — full auto: scrape → run fast Pollinations-backed models → pick winner
 - **API**: `POST /api/arena/score` — score a listing comprehensively
 - **API**: `GET /api/arena/models` — list all available models
 - **Service**: `server/services/modelArena.ts`
 - **Client utility**: `client/src/lib/optimizationScore.ts` — client-side listing score
-- Features: 8 free models (`:free` suffix, no credits), 3 premium models, side-by-side comparison, winner badge, expandable scoring breakdown, description preview modal, one-click Full Auto mode
-- Model Registry: Gemini 2.0 Flash, Gemma 3 27B, Llama 3.3 70B, DeepSeek R1, Mistral 7B, Qwen 2.5 72B, Hermes 3 405B, Gemini 2.0 Pro (all free), plus Claude 3.5 Sonnet, GPT-4o, Gemini 2.0 Flash Pro (premium)
+- Features: side-by-side comparison, winner badge, expandable scoring breakdown, description preview modal, one-click Full Auto mode
+- Model Registry: Pollinations-backed GPT-4o, Claude, DeepSeek, Gemini, Llama, Mistral, and Qwen variants
 
 ## Full Listing Optimization Score
 - Multi-dimensional score: Title (35%), Description (30%), Item Specifics (20%), Images (15%)

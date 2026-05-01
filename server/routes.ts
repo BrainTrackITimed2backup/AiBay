@@ -35,7 +35,7 @@ import {
   scoreSupplierMatch,
   suggestMinSalePrice,
 } from "./services/aiRouter";
-import { isReplicateConfigured, upscaleImage, upscaleImageStrict, removeBackground, generateLifestyleImage, ReplicateApiError } from "./services/replicateService";
+import { isReplicateConfigured, upscaleImageStrict, removeBackground, generateLifestyleImage, ReplicateApiError } from "./services/replicateService";
 import { scrapeProductFromUrl, detectPlatform, validateSafeUrl, type ScrapedProduct } from "./services/platformScrapers";
 import { searchSuppliers, buildSearchUrls } from "./services/supplierFinder";
 import { z } from "zod";
@@ -177,17 +177,8 @@ export async function registerRoutes(app: Express): Promise<void> {
       const items = await getTrendingItems(categoryId, marketplace, sortMode, timeRange);
       res.json({ items, source: "live" });
     } catch (error) {
-      // Never crash — return structured demo data so frontend always renders
-      console.warn("Trending live fetch failed, returning demo data:", error instanceof Error ? error.message : String(error));
-      const { generateDemoSearchResult } = await import("./services/ebayApi");
-      const demo = generateDemoSearchResult("trending electronics", false, 30, categoryId);
-      const demoItems = demo.items.map((it, i) => ({
-        ...it,
-        trendDirection: (["up", "up", "neutral", "down"] as const)[i % 4],
-        trendScore: Math.max(15, 95 - i * 2),
-        isDemo: true,
-      }));
-      res.json({ items: demoItems, source: "demo", message: "Using sample data — live eBay API unavailable" });
+      console.warn("Trending live fetch failed:", error instanceof Error ? error.message : String(error));
+      res.status(502).json({ message: error instanceof Error ? error.message : "Live eBay trending data is unavailable right now." });
     }
   });
 
@@ -424,7 +415,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         scrapedData.specifications || {}
       ).catch(() => []);
 
-      // Run Replicate image pipeline in parallel (graceful degradation when token absent)
+      // Image post-processing is intentionally conservative on Cloudflare.
       const { upscaleImagesBatch: upscaleBatch } = await import("./services/replicateService");
       const upscaleResults = await upscaleBatch(rawImages.slice(0, 30));
       const finalImageUrls = upscaleResults.map(r => r.upscaledUrl);
@@ -433,16 +424,6 @@ export async function registerRoutes(app: Express): Promise<void> {
         processed: r.upscaledUrl,
         status: r.status,
       }));
-
-      // Generate up to 3 lifestyle images (graceful degradation)
-      const lifestyleImageUrls: string[] = [];
-      if (isReplicateConfigured() && lifestylePrompts.length > 0) {
-        const top3 = lifestylePrompts.slice(0, 3);
-        const settled = await Promise.allSettled(top3.map(p => generateLifestyleImage(p)));
-        settled.forEach(r => {
-          if (r.status === "fulfilled") lifestyleImageUrls.push(r.value);
-        });
-      }
 
       const listing = await storage.createListing({
         productUrl,
@@ -454,7 +435,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         suggestedCategories: categoriesResult,
         titleScore: titleScoreResult,
         processedImages: processedImageMeta,
-        lifestyleImages: lifestyleImageUrls,
+        lifestyleImages: [],
         sourceData: {
           platform: scrapedData.platform,
           price: scrapedData.price,
@@ -574,7 +555,7 @@ export async function registerRoutes(app: Express): Promise<void> {
             const rawImages = await processImages(scrapedData.images);
             const bulkText = (scrapedData.description || "") + " " + Object.entries(scrapedData.specifications || {}).map(([k, v]) => `${k}: ${v}`).join(" ");
 
-            // Replicate pipeline (limit 4 images per listing in bulk for throughput)
+            // Image post-processing is intentionally conservative on Cloudflare.
             const upscaleResults = await bulkUpscaleBatch(rawImages.slice(0, 4));
             const finalImageUrls = upscaleResults.map(r => r.upscaledUrl);
             const processedImageMeta = upscaleResults.map(r => ({ original: r.url, processed: r.upscaledUrl, status: r.status }));
@@ -590,12 +571,6 @@ export async function registerRoutes(app: Express): Promise<void> {
               scrapedData.specifications || {}
             );
 
-            const lifestyleImageUrls: string[] = [];
-            if (isReplicateConfigured() && lifestylePrompts.length > 0) {
-              const settled = await Promise.allSettled(lifestylePrompts.slice(0, 2).map(p => generateLifestyleImage(p)));
-              settled.forEach(r => { if (r.status === "fulfilled") lifestyleImageUrls.push(r.value); });
-            }
-
             const listing = await storage.createListing({
               productUrl,
               generatedTitle: aiContent.title,
@@ -606,7 +581,7 @@ export async function registerRoutes(app: Express): Promise<void> {
               suggestedCategories: categories,
               titleScore,
               processedImages: processedImageMeta,
-              lifestyleImages: lifestyleImageUrls,
+              lifestyleImages: [],
               sourceData: { platform: scrapedData.platform, price: scrapedData.price, brand: scrapedData.brand, categoryBreadcrumb: scrapedData.categoryBreadcrumb, lifestylePrompts },
               bulkGroupId: String(job.id),
             });
@@ -661,52 +636,43 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  function handleReplicateError(error: unknown, res: import("express").Response) {
+  function handleImageAiError(error: unknown, res: import("express").Response) {
     if (error instanceof ReplicateApiError) {
       return res.status(error.status).json({ message: error.message });
     }
     return res.status(500).json({ message: error instanceof Error ? error.message : "Error" });
   }
 
-  // Upscale image via Replicate
+  // Upscale image
   app.post("/api/images/upscale", async (req, res) => {
     try {
-      if (!isReplicateConfigured()) {
-        return res.status(402).json({ message: "REPLICATE_API_TOKEN not configured" });
-      }
       const { imageUrl } = z.object({ imageUrl: z.string().url() }).parse(req.body);
       const upscaledUrl = await upscaleImageStrict(imageUrl);
       res.json({ upscaledUrl });
     } catch (error) {
-      handleReplicateError(error, res);
+      handleImageAiError(error, res);
     }
   });
 
-  // Remove background via Replicate
+  // Remove background
   app.post("/api/images/remove-bg", async (req, res) => {
     try {
-      if (!isReplicateConfigured()) {
-        return res.status(402).json({ message: "REPLICATE_API_TOKEN not configured" });
-      }
       const { imageUrl } = z.object({ imageUrl: z.string().url() }).parse(req.body);
       const resultUrl = await removeBackground(imageUrl);
       res.json({ resultUrl });
     } catch (error) {
-      handleReplicateError(error, res);
+      handleImageAiError(error, res);
     }
   });
 
-  // Generate lifestyle image via Replicate SDXL
+  // Generate lifestyle image via Pollinations
   app.post("/api/images/lifestyle", async (req, res) => {
     try {
-      if (!isReplicateConfigured()) {
-        return res.status(402).json({ message: "REPLICATE_API_TOKEN not configured" });
-      }
       const { prompt } = z.object({ prompt: z.string().min(5).max(500) }).parse(req.body);
       const imageUrl = await generateLifestyleImage(prompt);
       res.json({ imageUrl });
     } catch (error) {
-      handleReplicateError(error, res);
+      handleImageAiError(error, res);
     }
   });
 
@@ -929,9 +895,25 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Replicate status check
+  // Image AI status check
+  app.get("/api/images/status", async (_req, res) => {
+    res.json({
+      provider: "Pollinations.AI",
+      configured: isReplicateConfigured(),
+      supportsLifestyle: true,
+      supportsUpscale: false,
+      supportsRemoveBg: false,
+    });
+  });
+
   app.get("/api/images/replicate-status", async (_req, res) => {
-    res.json({ configured: isReplicateConfigured() });
+    res.json({
+      provider: "Pollinations.AI",
+      configured: isReplicateConfigured(),
+      supportsLifestyle: true,
+      supportsUpscale: false,
+      supportsRemoveBg: false,
+    });
   });
 
   // ─── eBay Item Details (Shopping API GetSingleItem) ─────────────────────
@@ -1467,7 +1449,7 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // One-click full automation: scrape → run all fast free models → return best
+  // One-click full automation: scrape → run fast Pollinations-backed models → return best
   // Save a chosen arena result as a full listing
   app.post("/api/arena/save", async (req, res) => {
     try {
@@ -1628,7 +1610,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   // ─── AI Models Info ───────────────────────────────────────────────────────
 
   app.get("/api/ai/models", (_req, res) => {
-    res.json({ models: MODEL_REGISTRY, provider: "Pollinations.AI", free: true, requiresKey: false });
+    res.json({ models: MODEL_REGISTRY, provider: "Pollinations.AI", requiresKey: true });
   });
 
   // ─── Health Check ─────────────────────────────────────────────────────────

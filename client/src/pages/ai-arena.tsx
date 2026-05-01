@@ -189,7 +189,7 @@ function ModelCard({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-white text-sm">{entry.modelName}</span>
                 <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${entry.free ? "border-emerald-500/40 text-emerald-400" : "border-violet-500/40 text-violet-400"}`}>
-                  {entry.free ? "FREE" : "PREMIUM"}
+                  {entry.free ? "STANDARD" : "PREMIUM"}
                 </Badge>
                 {entry.recommended && (
                   <Badge className="text-[10px] px-1.5 py-0 bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
@@ -326,7 +326,7 @@ function ModelCheckbox({ model, checked, onChange }: { model: ModelInfo; checked
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-white">{model.name}</span>
           <Badge variant="outline" className={`text-[10px] px-1 py-0 ${model.free ? "border-emerald-500/40 text-emerald-400" : "border-violet-500/40 text-violet-400"}`}>
-            {model.free ? "FREE" : "PAID"}
+            {model.free ? "STANDARD" : "PREMIUM"}
           </Badge>
           {model.recommended && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />}
         </div>
@@ -457,13 +457,13 @@ export default function AIArenaPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-black text-white tracking-tight">AI Model Arena</h1>
-                <p className="text-sm text-white/50">Compare free AI models side-by-side · Ranked by eBay optimization score</p>
+                <p className="text-sm text-white/50">Compare Pollinations-backed AI models side-by-side · Ranked by eBay optimization score</p>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs">
-              <Zap className="w-3 h-3 mr-1" /> {freeModels.length} Free Models
+              <Zap className="w-3 h-3 mr-1" /> {freeModels.length} Standard Models
             </Badge>
             <Badge className="bg-violet-500/20 text-violet-300 border border-violet-500/30 text-xs">
               <Crown className="w-3 h-3 mr-1" /> {premiumModels.length} Premium Models
@@ -545,7 +545,7 @@ export default function AIArenaPage() {
                   <><Zap className="w-4 h-4 mr-2" /> One-Click Full Auto</>
                 )}
               </Button>
-              <p className="text-[10px] text-white/30 text-center">Full Auto runs all fast free models and picks the highest-scoring result automatically.</p>
+              <p className="text-[10px] text-white/30 text-center">Full Auto runs the fast Pollinations-backed models you have access to and picks the highest-scoring result automatically.</p>
             </div>
 
             {/* Model Selection */}
@@ -555,14 +555,14 @@ export default function AIArenaPage() {
                   <Cpu className="w-4 h-4 text-white/50" /> Select Models
                 </h2>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => handleSelectAll(true)} className="text-[10px] text-emerald-400 hover:text-emerald-300">+Free</button>
+                  <button onClick={() => handleSelectAll(true)} className="text-[10px] text-emerald-400 hover:text-emerald-300">+Standard</button>
                   <span className="text-white/20">·</span>
                   <button onClick={handleDeselectAll} className="text-[10px] text-white/40 hover:text-white/60">Clear</button>
                 </div>
               </div>
 
               <div className="p-3 space-y-1 max-h-[480px] overflow-y-auto">
-                <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-2 px-1">Free Tier (No Credits)</p>
+                <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-2 px-1">Standard Access</p>
                 {freeModels.map(model => (
                   <ModelCheckbox
                     key={model.id}
@@ -599,7 +599,7 @@ export default function AIArenaPage() {
               </p>
               <ul className="space-y-1">
                 {[
-                  "Run 3–5 free models for best variety",
+                  "Run 3–5 standard models for best variety",
                   "Gemini 2.0 Flash = fastest + most structured",
                   "Llama 3.3 70B = best natural descriptions",
                   "Use Full Auto for instant single best result",

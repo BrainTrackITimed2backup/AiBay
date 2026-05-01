@@ -28,13 +28,11 @@ interface TrendingItem {
   trendDirection?: "up" | "down" | "flat" | "neutral";
   trendScore?: number;
   categoryName?: string;
-  isDemo?: boolean;
 }
 
 interface TrendingResponse {
   items: TrendingItem[];
-  source?: "live" | "demo";
-  message?: string;
+  source?: "live";
 }
 
 const CATEGORIES = [
@@ -168,9 +166,7 @@ export default function TrendingPage() {
               <TrendingUp className="w-6 h-6 text-primary" /> Trending Items
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              {data?.source === "demo"
-                ? "Sample trending feed shown while live eBay data is unavailable"
-                : "eBay's hottest products ranked by demand — updated every 15 minutes"}
+              eBay's hottest products ranked by demand — updated every 15 minutes
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -249,12 +245,6 @@ export default function TrendingPage() {
           </div>
         </Card>
 
-        {data?.source === "demo" && data.message && !isLoading && (
-          <Card className="p-4 border-amber-400/40 bg-amber-400/8">
-            <p className="text-sm text-amber-700 dark:text-amber-300">{data.message}</p>
-          </Card>
-        )}
-
         {/* Summary bar */}
         {items.length > 0 && (
           <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
@@ -264,12 +254,6 @@ export default function TrendingPage() {
               <Flame className="w-3 h-3 text-orange-500" />
               {items.filter((i: TrendingItem) => i.trendDirection === "up").length} hot items
             </span>
-            {data?.source === "demo" ? (
-              <>
-                <span>·</span>
-                <Badge variant="outline" className="text-[10px]">Sample data</Badge>
-              </>
-            ) : null}
             {sortMode === "mostSold" && (
               <Badge variant="secondary" className="text-[10px]">📦 Completed Sales</Badge>
             )}

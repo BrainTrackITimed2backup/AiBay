@@ -74,6 +74,14 @@ interface ImageProcessedEntry {
   status?: "done" | "failed" | "skipped";
 }
 
+interface ImageAiStatus {
+  provider: string;
+  configured: boolean;
+  supportsLifestyle: boolean;
+  supportsUpscale: boolean;
+  supportsRemoveBg: boolean;
+}
+
 // ─── Score Color Helpers ──────────────────────────────────────────────────────
 
 function scoreColor(s: number) {
@@ -590,11 +598,15 @@ function DescriptionBlockEditor({ listingId, initialHtml }: { listingId: number;
 function ImageCard({
   src,
   index,
-  replicateConfigured,
+  imageAiConfigured,
+  supportsUpscale,
+  supportsRemoveBg,
 }: {
   src: string;
   index: number;
-  replicateConfigured: boolean;
+  imageAiConfigured: boolean;
+  supportsUpscale: boolean;
+  supportsRemoveBg: boolean;
 }) {
   const [displayUrl, setDisplayUrl] = useState(src);
   const [upscaled, setUpscaled] = useState(false);
@@ -655,10 +667,16 @@ function ImageCard({
             size="sm"
             variant="outline"
             className="flex-1 text-[10px] h-7 px-1.5"
-            disabled={!replicateConfigured || isLoading || upscaled}
+            disabled={!imageAiConfigured || !supportsUpscale || isLoading || upscaled}
             data-testid={`btn-upscale-${index}`}
             onClick={() => upscaleMutation.mutate()}
-            title={!replicateConfigured ? "REPLICATE_API_TOKEN not configured" : "Upscale 4x with AI"}
+            title={
+              !imageAiConfigured
+                ? "POLLINATIONS_API_KEY not configured"
+                : !supportsUpscale
+                  ? "Upscaling is not available in the current Cloudflare image stack"
+                  : "Upscale 4x with AI"
+            }
           >
             {upscaleMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "4x Upscale"}
           </Button>
@@ -666,10 +684,16 @@ function ImageCard({
             size="sm"
             variant="outline"
             className="flex-1 text-[10px] h-7 px-1.5"
-            disabled={!replicateConfigured || isLoading || noBg}
+            disabled={!imageAiConfigured || !supportsRemoveBg || isLoading || noBg}
             data-testid={`btn-remove-bg-${index}`}
             onClick={() => removeBgMutation.mutate()}
-            title={!replicateConfigured ? "REPLICATE_API_TOKEN not configured" : "Remove background"}
+            title={
+              !imageAiConfigured
+                ? "POLLINATIONS_API_KEY not configured"
+                : !supportsRemoveBg
+                  ? "Background removal is not available in the current Cloudflare image stack"
+                  : "Remove background"
+            }
           >
             {removeBgMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "No BG"}
           </Button>
@@ -688,10 +712,10 @@ function ImageCard({
 
 function LifestyleGenerator({
   prompts,
-  replicateConfigured,
+  imageAiConfigured,
 }: {
   prompts: string[];
-  replicateConfigured: boolean;
+  imageAiConfigured: boolean;
 }) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [generated, setGenerated] = useState<string[]>([]);
@@ -707,11 +731,11 @@ function LifestyleGenerator({
     onError: (e: Error) => toast({ variant: "destructive", title: "Generation failed", description: e.message }),
   });
 
-  if (!replicateConfigured) {
+  if (!imageAiConfigured) {
     return (
       <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-sm text-muted-foreground">
-        <p className="font-medium text-amber-700 dark:text-amber-400 mb-1">REPLICATE_API_TOKEN required</p>
-        <p className="text-xs">Add your Replicate API token to generate lifestyle images via SDXL.</p>
+        <p className="font-medium text-amber-700 dark:text-amber-400 mb-1">POLLINATIONS_API_KEY required</p>
+        <p className="text-xs">Add your Pollinations API key to generate lifestyle images from the Cloudflare Worker.</p>
       </div>
     );
   }
@@ -979,11 +1003,13 @@ export default function ListingDetails() {
   const [mainTab, setMainTab] = useState("overview");
 
   // All hooks must be declared before conditional returns (React rules of hooks)
-  const { data: replicateStatus } = useQuery<{ configured: boolean }>({
-    queryKey: ["/api/images/replicate-status"],
+  const { data: imageAiStatus } = useQuery<ImageAiStatus>({
+    queryKey: ["/api/images/status"],
     staleTime: 60000,
   });
-  const replicateConfigured = replicateStatus?.configured ?? false;
+  const imageAiConfigured = imageAiStatus?.configured ?? false;
+  const supportsUpscale = imageAiStatus?.supportsUpscale ?? false;
+  const supportsRemoveBg = imageAiStatus?.supportsRemoveBg ?? false;
 
   if (isLoading) {
     return (
@@ -1250,7 +1276,14 @@ export default function ListingDetails() {
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                       {listingImages.map((img, i) => (
-                        <ImageCard key={i} src={img} index={i} replicateConfigured={replicateConfigured} />
+                        <ImageCard
+                          key={i}
+                          src={img}
+                          index={i}
+                          imageAiConfigured={imageAiConfigured}
+                          supportsUpscale={supportsUpscale}
+                          supportsRemoveBg={supportsRemoveBg}
+                        />
                       ))}
                     </div>
                   </CardContent>
@@ -1281,7 +1314,7 @@ export default function ListingDetails() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <LifestyleGenerator prompts={lifestylePrompts} replicateConfigured={replicateConfigured} />
+                      <LifestyleGenerator prompts={lifestylePrompts} imageAiConfigured={imageAiConfigured} />
                     </CardContent>
                   </Card>
                 )}
@@ -1542,11 +1575,11 @@ export default function ListingDetails() {
   );
 }
 
-// ─── Replicate Status Banner ──────────────────────────────────────────────────
+// ─── Image AI Status Banner ───────────────────────────────────────────────────
 
 function ReplicateStatusBanner() {
-  const { data } = useQuery<{ configured: boolean }>({
-    queryKey: ["/api/images/replicate-status"],
+  const { data } = useQuery<ImageAiStatus>({
+    queryKey: ["/api/images/status"],
     staleTime: 60000,
   });
 
@@ -1554,10 +1587,10 @@ function ReplicateStatusBanner() {
 
   return (
     <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-sm">
-      <p className="font-medium text-amber-700 dark:text-amber-400 mb-1">Image AI requires REPLICATE_API_TOKEN</p>
+      <p className="font-medium text-amber-700 dark:text-amber-400 mb-1">Image AI requires POLLINATIONS_API_KEY</p>
       <p className="text-xs text-muted-foreground">
-        Add your Replicate API token to enable 4x upscaling, background removal, and AI lifestyle image generation.
-        The image gallery is still available for download below.
+        Add your Pollinations API key to enable server-side lifestyle image generation.
+        Upscaling and background removal stay disabled until a real Cloudflare-compatible image pipeline is added.
       </p>
     </div>
   );

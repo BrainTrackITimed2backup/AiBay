@@ -29,13 +29,11 @@ interface QuickAnalysis {
   avgSoldPrice: number;
   uniqueSellers: number;
   opportunityScore: number;
-  isDemo?: boolean;
 }
 
 interface TrendingFeed {
   items: any[];
-  source?: "live" | "demo";
-  message?: string;
+  source?: "live";
 }
 
 const QUICK_TOOLS = [
@@ -47,7 +45,7 @@ const QUICK_TOOLS = [
   { href: "/keywords", label: "Keyword Tool", icon: Search, color: "from-cyan-500 to-cyan-600", desc: "20 AI keyword variations with STR data" },
 ];
 
-// Hot sellable niches — always visible to guests, no API key needed
+// Manual starter niches — intentionally editorial, not live telemetry
 const HOT_CATEGORIES = [
   { label: "Wireless Earbuds", emoji: "🎧", trend: "+34%" },
   { label: "Vintage Cameras", emoji: "📷", trend: "+22%" },
@@ -152,9 +150,6 @@ function QuickAnalyzer() {
         {!ebayStatus?.configured && (
           <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-400">Setup required</Badge>
         )}
-        {data?.isDemo && (
-          <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-400">Sample data</Badge>
-        )}
       </div>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <Input
@@ -190,11 +185,6 @@ function QuickAnalyzer() {
                 </div>
               ))}
             </div>
-            {data.isDemo && (
-              <div className="rounded-lg border border-amber-400/40 bg-amber-400/8 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                Sample market data is showing because live eBay data is unavailable in the current environment.
-              </div>
-            )}
             <div className="flex gap-2 flex-wrap">
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => setLocation(`/market-research?keyword=${encodeURIComponent(query!)}`)}>
                 Full Analysis <ArrowRight className="w-3 h-3" />
@@ -231,11 +221,14 @@ export default function Dashboard() {
     queryKey: ["/api/listings"],
   });
 
-  const { data: hotData } = useQuery<TrendingFeed>({
+  const { data: hotData, error: hotDataError } = useQuery<TrendingFeed>({
     queryKey: ["/api/ebay/trending", "all", "EBAY-US"],
     queryFn: async () => {
       const res = await fetch(buildApiUrl("/api/ebay/trending?marketplace=EBAY-US"));
-      if (!res.ok) return { items: [] };
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Live eBay hot items are unavailable right now." }));
+        throw new Error(error.message || "Live eBay hot items are unavailable right now.");
+      }
       return res.json();
     },
     staleTime: 60 * 1000,
@@ -427,8 +420,8 @@ export default function Dashboard() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-display font-bold text-base flex items-center gap-2">
-              <span className="text-lg">🔥</span> Hot Categories Right Now
-              <Badge variant="secondary" className="text-xs">Editorial starter list</Badge>
+              <span className="text-lg">🔥</span> Starter Niches
+              <Badge variant="secondary" className="text-xs">Manual shortlist</Badge>
             </h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
@@ -449,7 +442,6 @@ export default function Dashboard() {
                       <span className="text-xl">{cat.emoji}</span>
                       <p className="text-xs font-medium group-hover:text-primary transition-colors">{cat.label}</p>
                     </div>
-                    <Badge className="text-[9px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 px-1.5 py-0">{cat.trend}</Badge>
                   </div>
                   <div className="flex items-center gap-1 mt-2 text-[10px] text-muted-foreground">
                     <Globe className="w-2.5 h-2.5" /> Find suppliers <ArrowRight className="w-2.5 h-2.5 ml-auto" />
@@ -460,24 +452,27 @@ export default function Dashboard() {
           </div>
         </section>
 
+        {hotDataError ? (
+          <Card className="p-4 border-amber-400/40 bg-amber-400/8">
+            <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{(hotDataError as Error).message}</span>
+            </div>
+          </Card>
+        ) : null}
+
         {/* ── Hot Right Now ─────────────────────────────────────────────── */}
         {hotItems.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display font-bold text-base flex items-center gap-2">
-                <span className="text-lg">⚡</span> {hotData?.source === "demo" ? "Sample eBay Hot Items" : "Live eBay Hot Items"}
+                <span className="text-lg">⚡</span> Live eBay Hot Items
                 <Badge variant="secondary" className="text-xs">{hotItems.length} items</Badge>
-                {hotData?.source === "demo" ? <Badge variant="outline" className="text-xs">Demo</Badge> : null}
               </h2>
               <Button variant="ghost" size="sm" onClick={() => setLocation("/trending")} data-testid="btn-see-all-trending">
                 See all <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </div>
-            {hotData?.source === "demo" && hotData.message ? (
-              <div className="mb-3 rounded-lg border border-amber-400/40 bg-amber-400/8 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                {hotData.message}
-              </div>
-            ) : null}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {hotItems.map((item: any, idx: number) => (
                 <motion.div

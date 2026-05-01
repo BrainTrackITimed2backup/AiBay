@@ -82,185 +82,62 @@ const OPPORTUNITY_STYLES: Record<string, string> = {
 };
 
 export default function AdSpyPage() {
-  const [category, setCategory] = useState("all");
-  const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"trendScore" | "winScore" | "volume">("trendScore");
-
-  let products: TrendProduct[] = category === "all"
-    ? Object.values(TRENDING_BY_CATEGORY).flat().filter(p => p.title !== undefined)
-    : TRENDING_BY_CATEGORY[category] || [];
-
-  if (search) {
-    products = products.filter(p =>
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.category.toLowerCase().includes(search.toLowerCase()) ||
-      p.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
-    );
-  }
-
-  products = [...products].sort((a, b) => b[sortBy === "volume" ? "trendScore" : sortBy] - a[sortBy === "volume" ? "trendScore" : sortBy]);
-
-  const hotCount = products.filter(p => p.ebayOpportunity === "Hot").length;
-  const avgWinScore = products.length ? Math.round(products.reduce((s, p) => s + p.winScore, 0) / products.length) : 0;
-
   return (
     <Layout>
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 bg-gradient-to-br from-pink-100 to-red-100 rounded-xl">
-              <Flame className="w-6 h-6 text-red-500" />
+      <div className="p-6 max-w-4xl mx-auto">
+        <Card className="border-border/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-3">
+              <div className="p-2.5 bg-gradient-to-br from-pink-100 to-red-100 rounded-xl">
+                <Flame className="w-6 h-6 text-red-500" />
+              </div>
+              <div>
+                <span className="block text-2xl font-bold">Social Trend Spy</span>
+                <span className="block text-sm font-normal text-muted-foreground mt-1">
+                  Live social ingestion is not connected yet in the Cloudflare stack.
+                </span>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="rounded-lg border border-amber-400/40 bg-amber-400/8 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+              This page no longer shows curated or mock social trend cards. It will stay empty until a real TikTok, Instagram, YouTube, or Facebook ingestion source is wired.
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">Social Trend Spy</h1>
-              <p className="text-muted-foreground text-sm">Curated trend board for product ideas from TikTok, Instagram, YouTube, and Facebook</p>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { label: "Live Sources", value: "0", icon: Globe },
+                { label: "Mock Cards", value: "0", icon: Eye },
+                { label: "Suggested Action", value: "Wire a source", icon: BarChart3 },
+              ].map((item) => (
+                <Card key={item.label} className="border">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+                      <item.icon className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold leading-none">{item.value}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.label}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-            <Globe className="w-3.5 h-3.5" />
-            <span>Currently curated sample trends for frontend preview. Live social ingestion is not wired yet.</span>
-          </div>
-        </div>
 
-        {/* Stats bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          {[
-            { label: "Hot Opportunities", value: hotCount, icon: Flame, color: "text-red-500 bg-red-50" },
-            { label: "Avg Win Score", value: `${avgWinScore}/100`, icon: Star, color: "text-amber-500 bg-amber-50" },
-            { label: "Products Tracked", value: products.length, icon: Eye, color: "text-blue-500 bg-blue-50" },
-            { label: "Platforms Monitored", value: "5", icon: Globe, color: "text-purple-500 bg-purple-50" },
-          ].map(s => (
-            <Card key={s.label} className="border">
-              <CardContent className="p-3 flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${s.color.split(" ")[1]}`}>
-                  <s.icon className={`w-4 h-4 ${s.color.split(" ")[0]}`} />
-                </div>
-                <div>
-                  <p className="text-lg font-bold leading-none">{s.value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Search trending products, tags, categories…"
-              value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-trends" />
-          </div>
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-full sm:w-44" data-testid="select-category">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="tech">Tech & Gadgets</SelectItem>
-              <SelectItem value="fashion">Fashion</SelectItem>
-              <SelectItem value="home">Home & Garden</SelectItem>
-              <SelectItem value="beauty">Beauty & Health</SelectItem>
-              <SelectItem value="pets">Pet Accessories</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={sortBy} onValueChange={(v: "trendScore" | "winScore") => setSortBy(v)}>
-            <SelectTrigger className="w-full sm:w-40" data-testid="select-sort">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="trendScore">Sort: Trending</SelectItem>
-              <SelectItem value="winScore">Sort: Win Score</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Product grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((p, i) => (
-            <motion.div key={i} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-              <Card className="h-full hover:shadow-md transition-shadow border" data-testid={`card-trend-${i}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{p.emoji}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PLATFORM_COLORS[p.platform] || "bg-gray-100 text-gray-700"}`}>
-                        {p.platform}
-                      </span>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${OPPORTUNITY_STYLES[p.ebayOpportunity]}`}>
-                      {p.ebayOpportunity === "Hot" ? "🔥 " : ""}{p.ebayOpportunity}
-                    </span>
-                  </div>
-
-                  <h3 className="font-semibold text-sm leading-snug mb-2">{p.title}</h3>
-                  <p className="text-xs text-muted-foreground mb-3">{p.category}</p>
-
-                  <div className="grid grid-cols-3 gap-2 mb-3 text-center">
-                    <div className="bg-muted/40 rounded-lg p-2">
-                      <p className="text-xs text-muted-foreground">Trend</p>
-                      <p className="font-bold text-sm text-red-500">{p.trendScore}</p>
-                    </div>
-                    <div className="bg-muted/40 rounded-lg p-2">
-                      <p className="text-xs text-muted-foreground">Win Score</p>
-                      <p className="font-bold text-sm text-blue-600">{p.winScore}</p>
-                    </div>
-                    <div className="bg-muted/40 rounded-lg p-2">
-                      <p className="text-xs text-muted-foreground">Searches</p>
-                      <p className="font-bold text-sm">{p.estimatedSearchVolume.split("/")[0]}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-1 text-sm text-green-600 font-medium">
-                      <DollarSign className="w-3.5 h-3.5" />
-                      {p.avgPrice}
-                    </div>
-                    <div className="flex gap-1 flex-wrap justify-end">
-                      {p.tags.slice(0, 2).map(t => (
-                        <span key={t} className="text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">{t}</span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Win score bar */}
-                  <div className="mb-3">
-                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span>AIBAY Win Score</span>
-                      <span className="font-semibold">{p.winScore}/100</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-1.5">
-                      <div className={`h-1.5 rounded-full ${p.winScore >= 90 ? "bg-green-500" : p.winScore >= 75 ? "bg-blue-500" : "bg-amber-500"}`}
-                        style={{ width: `${p.winScore}%` }} />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <a href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(p.title)}&_sop=12`}
-                      target="_blank" rel="noopener noreferrer" className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full text-xs" data-testid={`button-search-ebay-${i}`}>
-                        <Search className="w-3 h-3 mr-1" /> Find on eBay
-                      </Button>
-                    </a>
-                    <Link href={`/generate?title=${encodeURIComponent(p.title)}`}>
-                      <Button size="sm" className="text-xs" data-testid={`button-generate-listing-${i}`}>
-                        <Zap className="w-3 h-3 mr-1" /> Generate
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-
-        {products.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground">
-            <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">No products found</p>
-            <p className="text-sm">Try a different search or category</p>
-          </div>
-        )}
+            <div className="flex flex-wrap gap-2">
+              <Link href="/trending">
+                <Button size="sm" data-testid="button-open-trending">
+                  <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Open Live eBay Trends
+                </Button>
+              </Link>
+              <Link href="/market-research">
+                <Button size="sm" variant="outline" data-testid="button-open-market-research">
+                  <BarChart3 className="w-3.5 h-3.5 mr-1.5" /> Open Market Research
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );

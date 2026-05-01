@@ -1,14 +1,12 @@
 // ─── AIBAY AI Engine — Pollinations.AI ──────────────────────────────────────
-// Pollinations.AI: 100% free, zero API key, zero registration.
-// Endpoint: https://text.pollinations.ai/openai/v1 (OpenAI-compatible)
+// Authenticated via POLLINATIONS_API_KEY against the unified Pollinations API.
 
 import axios from "axios";
 
-// Pollinations.AI — 100% free, zero API key
-// Correct endpoint (Apr 2026): https://text.pollinations.ai/openai/v1
-const POLLINATIONS_BASE = "https://text.pollinations.ai/openai/v1";
+const POLLINATIONS_BASE = "https://gen.pollinations.ai/v1";
+const POLLINATIONS_API_KEY = process.env.POLLINATIONS_API_KEY;
 
-// Models in priority order — all free, no key
+// Models in priority order
 const MODELS = [
   "openai",          // GPT-4o
   "mistral",         // Mistral Large
@@ -18,6 +16,11 @@ const MODELS = [
 ];
 
 async function callAI(prompt: string, jsonMode = true): Promise<string | null> {
+  if (!POLLINATIONS_API_KEY) {
+    console.warn("[AI] POLLINATIONS_API_KEY not configured. Using deterministic fallback output.");
+    return null;
+  }
+
   // Try each model via direct HTTP (more reliable than SDK for Pollinations)
   for (const model of MODELS) {
     try {
@@ -33,7 +36,10 @@ async function callAI(prompt: string, jsonMode = true): Promise<string | null> {
         body,
         {
           timeout: 25000,
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${POLLINATIONS_API_KEY}`,
+          },
         }
       );
       const content = resp.data?.choices?.[0]?.message?.content;

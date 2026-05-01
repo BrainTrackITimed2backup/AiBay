@@ -1,16 +1,16 @@
 // ─── AIBAY Model Arena — Pollinations.AI ─────────────────────────────────────
 // LMArena-style: runs multiple AI models in parallel and scores their outputs.
-// Powered by Pollinations.AI — 100% free, no API key, no registration needed.
-// Models: GPT-4o, Claude Opus 4.7, DeepSeek V4 Flash/Pro, Gemini, Llama, Mistral
+// Powered by Pollinations.AI via the authenticated unified API.
 
 import OpenAI from "openai";
 
 const POLLINATIONS_BASE = "https://gen.pollinations.ai/v1";
+const POLLINATIONS_API_KEY = process.env.POLLINATIONS_API_KEY;
 
-// Single Pollinations client — no API key needed
+// Single Pollinations client
 const pollinationsClient = new OpenAI({
   baseURL: POLLINATIONS_BASE,
-  apiKey: "pollinations",
+  apiKey: POLLINATIONS_API_KEY || "missing-pollinations-key",
 });
 
 // ─── Model Registry ───────────────────────────────────────────────────────────
@@ -296,6 +296,10 @@ async function callSingleModel(
   modelId: string,
   productData: { title: string; description?: string; images?: string[]; specs?: Record<string, string> }
 ): Promise<{ title: string; html_description: string }> {
+  if (!POLLINATIONS_API_KEY) {
+    throw new Error("POLLINATIONS_API_KEY not configured");
+  }
+
   const prompt = buildArenaPrompt(productData);
   const completion = await pollinationsClient.chat.completions.create({
     model: modelId,

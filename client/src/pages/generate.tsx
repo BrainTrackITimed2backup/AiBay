@@ -673,7 +673,7 @@ export default function GeneratePage() {
                                   <p className="text-xs leading-relaxed line-clamp-2 text-foreground/90">{result.title}</p>
                                   <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                                     <span>{Math.round(result.latencyMs / 1000)}s</span>
-                                    {result.free && <Badge variant="outline" className="text-[9px] px-1 py-0 text-emerald-600 border-emerald-500/30">FREE</Badge>}
+                                    {result.free && <Badge variant="outline" className="text-[9px] px-1 py-0 text-emerald-600 border-emerald-500/30">STANDARD</Badge>}
                                   </div>
                                   <Button
                                     size="sm"

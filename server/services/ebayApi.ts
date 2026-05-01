@@ -155,57 +155,6 @@ function parseEbayRss(xml: string, isSold: boolean, categoryId?: string): { item
   return { items, totalEntries: items.length };
 }
 
-// ─── Demo Data Generator (used when eBay is unreachable) ─────────────────────
-function generateDemoItems(keyword: string, count: number, isSold: boolean, categoryId?: string): any[] {
-  const seed = keyword.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const rng = (min: number, max: number, offset = 0) => {
-    const x = Math.sin(seed + offset) * 10000;
-    return min + ((x - Math.floor(x)) * (max - min));
-  };
-
-  const basePrice = Math.round(rng(15, 850, 1) * 100) / 100;
-  const conditions = ["New", "Like New", "Very Good", "Good", "Acceptable"];
-  const sellers = ["tech_deals_usa", "bargain_finds_co", "premium_seller88", "daily_deals_hub", "top_rated_store"];
-
-  return Array.from({ length: count }, (_, i) => {
-    const priceVariance = rng(0.75, 1.3, i + 10);
-    const price = Math.round(basePrice * priceVariance * 100) / 100;
-    const soldPrice = Math.round(price * rng(0.82, 0.97, i + 20) * 100) / 100;
-    const condIdx = Math.floor(rng(0, conditions.length, i + 30));
-    const sellerIdx = Math.floor(rng(0, sellers.length, i + 40));
-    const watchCount = Math.floor(rng(0, 85, i + 50));
-    return {
-      itemId: `demo-${seed}-${i}`,
-      title: `${keyword} - ${conditions[condIdx]} ${i % 3 === 0 ? "| Fast Shipping" : i % 3 === 1 ? "| Best Value" : "| Top Rated"}`,
-      price: isSold ? soldPrice : price,
-      currency: "USD",
-      galleryUrl: `https://placehold.co/200x200/1a1a2e/ffffff?text=${encodeURIComponent(keyword.slice(0, 8))}`,
-      viewItemUrl: `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(keyword)}`,
-      condition: conditions[condIdx],
-      conditionId: condIdx === 0 ? "1000" : condIdx === 1 ? "1500" : "3000",
-      categoryId: categoryId || "293",
-      categoryName: "Electronics",
-      sellerUsername: sellers[sellerIdx],
-      sellerFeedback: Math.floor(rng(100, 15000, i + 60)),
-      sellerPositivePercent: Math.round(rng(96, 100, i + 70) * 10) / 10,
-      watchCount,
-      listingType: "FixedPrice",
-      startTime: new Date(Date.now() - rng(1, 30, i + 80) * 86400000).toISOString(),
-      endTime: isSold ? new Date(Date.now() - rng(0, 7, i + 90) * 86400000).toISOString() : "",
-      location: ["United States", "California, US", "New York, US", "Texas, US"][Math.floor(rng(0, 4, i + 95))],
-      shippingType: i % 2 === 0 ? "Free" : "Calculated",
-      isSold,
-    };
-  });
-}
-
-export function generateDemoSearchResult(keyword: string, isSold: boolean, pageSize = 20, categoryId?: string): EbaySearchResult {
-  const items = generateDemoItems(keyword, pageSize, isSold, categoryId);
-  const seed = keyword.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const totalEntries = Math.floor(200 + (seed % 800));
-  return { items, totalEntries, totalPages: Math.ceil(totalEntries / pageSize), isDemo: true } as any;
-}
-
 // ─── Marketplace IDs ──────────────────────────────────────────────────────────
 export const MARKETPLACES: Record<string, string> = {
   "EBAY-US": "United States",
@@ -394,22 +343,22 @@ export async function findItemsByKeywords(
   } = {}
 ): Promise<EbaySearchResult> {
   const appId = getEbayAppId();
+  const marketplace = options.marketplace || "EBAY-US";
 
   // ── Public scraping fallback when no API key configured ──
   if (!appId) {
-    const cacheKey = `scrape:active:${options.marketplace}:${keywords}:${JSON.stringify(options)}`;
+    const cacheKey = `scrape:active:${marketplace}:${keywords}:${JSON.stringify(options)}`;
     const cached = getCached<EbaySearchResult>(cacheKey);
     if (cached) return cached;
     try {
-      const scraped = await scrapeEbaySearch(keywords, { ...options, sold: false });
+      const scraped = await scrapeEbaySearch(keywords, { ...options, marketplace, sold: false });
       const result: EbaySearchResult = { items: scraped.items as EbayItem[], totalEntries: scraped.totalEntries, totalPages: Math.ceil(scraped.totalEntries / (options.pageSize || 50)) };
       setCache(cacheKey, result, 5 * 60 * 1000);
       return result;
-    } catch {
-      return generateDemoSearchResult(keywords, false, options.pageSize || 20, options.categoryId);
+    } catch (scrapeErr: any) {
+      throw new Error(scrapeErr?.message || "Live eBay data is unavailable right now.");
     }
   }
-  const marketplace = options.marketplace || "EBAY-US";
   const cacheKey = `active:${marketplace}:${keywords}:${JSON.stringify(options)}`;
 
   const cached = getCached<EbaySearchResult>(cacheKey);
@@ -479,8 +428,7 @@ export async function findItemsByKeywords(
       setCache(cacheKey, result, 5 * 60 * 1000);
       return result;
     } catch (scrapeErr: any) {
-      console.warn(`[eBay] Scraper also failed (${scrapeErr?.message}), using demo data`);
-      return generateDemoSearchResult(keywords, false, options.pageSize || 20, options.categoryId);
+      throw new Error(scrapeErr?.message || "Live eBay data is unavailable right now.");
     }
   }
 }
@@ -521,8 +469,8 @@ export async function findCompletedItems(
       const result: EbaySearchResult = { items: scraped.items as EbayItem[], totalEntries: scraped.totalEntries, totalPages: Math.ceil(scraped.totalEntries / (options.pageSize || 50)) };
       setCache(scrapeKey, result, 5 * 60 * 1000);
       return result;
-    } catch {
-      return generateDemoSearchResult(keywords, true, options.pageSize || 50, options.categoryId);
+    } catch (scrapeErr: any) {
+      throw new Error(scrapeErr?.message || "Live eBay sold data is unavailable right now.");
     }
   }
 
@@ -585,8 +533,7 @@ export async function findCompletedItems(
       setCache(cacheKey, result, 5 * 60 * 1000);
       return result;
     } catch (scrapeErr: any) {
-      console.warn(`[eBay] Scraper also failed (${scrapeErr?.message}), using demo data`);
-      return generateDemoSearchResult(keywords, true, options.pageSize || 50, options.categoryId);
+      throw new Error(scrapeErr?.message || "Live eBay sold data is unavailable right now.");
     }
   }
 }
@@ -639,8 +586,6 @@ export async function getMarketAnalysis(
     competitionScore === 0 ? 0 : Math.round((demandScore / (competitionScore / 10 + 1)) * 2)
   );
 
-  const isDemo = !!(activeResult as any).isDemo || !!(soldResult as any).isDemo;
-
   const analysis: MarketAnalysis = {
     keyword,
     marketplace,
@@ -658,7 +603,6 @@ export async function getMarketAnalysis(
     topListings: activeItems.slice(0, 20),
     soldListingsData: soldItems.slice(0, 20),
     priceHistogram: buildPriceHistogram(allPrices),
-    ...(isDemo ? { isDemo: true } : {}),
   };
 
   setCache(cacheKey, analysis, 5 * 60 * 1000);

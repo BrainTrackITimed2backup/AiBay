@@ -57,7 +57,6 @@ interface MarketAnalysis {
   topListings: ListingItem[];
   soldListingsData: ListingItem[];
   keywordSuggestions?: string[];
-  isDemo?: boolean;
 }
 
 // ─── Client-side VERO quick check (no API call needed) ────────────────────────
@@ -452,17 +451,6 @@ export default function MarketResearch() {
         {/* Results */}
         {analysis && !isLoading && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-
-            {/* Demo data notice */}
-            {analysis.isDemo && (
-              <div className="flex items-center gap-2.5 rounded-lg border border-amber-400/40 bg-amber-400/8 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-300">
-                <Info className="w-4 h-4 shrink-0" />
-                <span>
-                  <strong>Sample data</strong> — eBay is unreachable from the development environment.
-                  All features work normally. Real live data loads automatically once the Cloudflare Worker and D1 database are configured.
-                </span>
-              </div>
-            )}
 
             {/* Scores + Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
