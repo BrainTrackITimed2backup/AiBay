@@ -24,6 +24,43 @@ interface Stats {
   ebayConfigured: boolean;
 }
 
+interface HotItemsResponse {
+  items: any[];
+  source?: "live" | "demo";
+  message?: string;
+}
+
+interface LiveOpsResponse {
+  timestamp: string;
+  health: {
+    totalListings: number;
+    totalWatchlist: number;
+    totalTrackedSellers: number;
+    keywordSearchesToday: number;
+  };
+  status: {
+    ebayConfigured: boolean;
+    registrationEnabled: boolean;
+    maintenanceMode: boolean;
+    siteName: string;
+  };
+  catalog: {
+    templateCount: number;
+    planCount: number;
+    activePlanCount: number;
+    arenaModelCount: number;
+    freeArenaModelCount: number;
+  };
+  activity: Array<{
+    id: string;
+    type: string;
+    label: string;
+    meta: string;
+    href?: string;
+    timestamp: string;
+  }>;
+}
+
 const QUICK_TOOLS = [
   { href: "/market-research", label: "Market Research", icon: BarChart3, color: "from-blue-500 to-blue-600", desc: "Live STR, demand & opportunity scores" },
   { href: "/turbo-scanner", label: "Turbo Scanner", icon: ScanLine, color: "from-violet-500 to-violet-600", desc: "Scan 100+ products by category" },
@@ -207,9 +244,10 @@ export default function Dashboard() {
 
   const { data: recentListings, isLoading: loadingListings } = useQuery<any[]>({
     queryKey: ["/api/listings"],
+    refetchInterval: 30000,
   });
 
-  const { data: hotData } = useQuery<{ items: any[] }>({
+  const { data: hotData } = useQuery<HotItemsResponse>({
     queryKey: ["/api/ebay/trending", "all", "EBAY-US"],
     queryFn: async () => {
       const res = await fetch(buildApiUrl("/api/ebay/trending?marketplace=EBAY-US"));
@@ -218,6 +256,11 @@ export default function Dashboard() {
     },
     staleTime: 60 * 1000,
     retry: false,
+  });
+
+  const { data: liveOps } = useQuery<LiveOpsResponse>({
+    queryKey: ["/api/live/ops"],
+    refetchInterval: 30000,
   });
 
   const statCards = [
@@ -328,6 +371,144 @@ export default function Dashboard() {
               </Card>
             </motion.div>
           ))}
+        </div>
+
+        {/* ── Live Operations ───────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-5">
+          <Card className="p-5 border-border/60">
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+              <div>
+                <h2 className="font-display font-bold text-base flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" /> Live Operations
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Real platform status, latest activity, and whether the data feed is live or fallback.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className={cn(
+                  "text-xs border",
+                  hotData?.source === "live"
+                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                    : "bg-amber-500/10 text-amber-700 border-amber-500/20"
+                )}>
+                  {hotData?.source === "live" ? "Trending feed live" : "Trending feed fallback"}
+                </Badge>
+                <Badge className={cn(
+                  "text-xs border",
+                  liveOps?.status.maintenanceMode
+                    ? "bg-red-500/10 text-red-600 border-red-500/20"
+                    : "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                )}>
+                  {liveOps?.status.maintenanceMode ? "Maintenance mode on" : "Platform active"}
+                </Badge>
+              </div>
+            </div>
+
+            {hotData?.source === "demo" && (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 mb-4">
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  Trending data is currently showing fallback/demo results until the live eBay source is configured cleanly.
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              {[
+                { label: "Templates", value: liveOps?.catalog.templateCount ?? 0 },
+                { label: "Plans", value: liveOps?.catalog.activePlanCount ?? 0 },
+                { label: "Arena Models", value: liveOps?.catalog.arenaModelCount ?? 0 },
+                { label: "Updated", value: liveOps?.timestamp ? new Date(liveOps.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl bg-secondary/35 border border-border/40 p-3">
+                  <p className="text-lg font-display font-black">{item.value}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{item.label}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              {liveOps?.activity?.length ? liveOps.activity.map((event) => (
+                <div
+                  key={event.id}
+                  className={cn(
+                    "rounded-xl border border-border/40 bg-secondary/20 px-3 py-3",
+                    event.href && "cursor-pointer hover:border-primary/30 hover:bg-secondary/35 transition-colors"
+                  )}
+                  onClick={() => event.href && setLocation(event.href)}
+                  data-testid={`live-activity-${event.id}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{event.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{event.meta}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 capitalize">
+                        {event.type}
+                      </Badge>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {new Date(event.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div className="rounded-xl border border-dashed border-border/50 px-4 py-6 text-center">
+                  <p className="text-sm text-muted-foreground">No recent activity yet. Run research, supplier lookup, or generate a listing to populate the live feed.</p>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card className="p-5 border-border/60">
+            <h2 className="font-display font-bold text-base flex items-center gap-2 mb-4">
+              <Sparkles className="w-4 h-4 text-primary" /> SaaS Readiness
+            </h2>
+            <div className="space-y-3">
+              {[
+                {
+                  label: "eBay data source",
+                  value: liveOps?.status.ebayConfigured ? "Configured" : "Needs setup",
+                  tone: liveOps?.status.ebayConfigured ? "emerald" : "amber",
+                },
+                {
+                  label: "Registration flow",
+                  value: liveOps?.status.registrationEnabled ? "Open" : "Disabled",
+                  tone: liveOps?.status.registrationEnabled ? "blue" : "slate",
+                },
+                {
+                  label: "Pricing catalog",
+                  value: `${liveOps?.catalog.activePlanCount ?? 0} active plans`,
+                  tone: (liveOps?.catalog.activePlanCount ?? 0) > 0 ? "emerald" : "amber",
+                },
+                {
+                  label: "Model coverage",
+                  value: `${liveOps?.catalog.freeArenaModelCount ?? 0} free / ${liveOps?.catalog.arenaModelCount ?? 0} total`,
+                  tone: "violet",
+                },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center justify-between rounded-xl border border-border/40 bg-secondary/20 px-3 py-3">
+                  <div>
+                    <p className="text-sm font-medium">{row.label}</p>
+                    <p className="text-[11px] text-muted-foreground">Current live product status</p>
+                  </div>
+                  <Badge
+                    className={cn(
+                      "text-xs border",
+                      row.tone === "emerald" && "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+                      row.tone === "amber" && "bg-amber-500/10 text-amber-700 border-amber-500/20",
+                      row.tone === "blue" && "bg-blue-500/10 text-blue-600 border-blue-500/20",
+                      row.tone === "violet" && "bg-violet-500/10 text-violet-600 border-violet-500/20",
+                      row.tone === "slate" && "bg-slate-500/10 text-slate-600 border-slate-500/20",
+                    )}
+                  >
+                    {row.value}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
 
         {/* ── Smart 4-Step Workflow ──────────────────────────────────────── */}

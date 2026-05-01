@@ -447,258 +447,274 @@ export default function AIArenaPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-                <Cpu className="w-5 h-5 text-white" />
-              </div>
+      <div className="max-w-7xl mx-auto">
+        <div className="rounded-[28px] border border-slate-800/80 bg-[radial-gradient(circle_at_top,#1e293b_0%,#0f172a_46%,#020617_100%)] text-white shadow-2xl shadow-slate-950/30 overflow-hidden">
+          <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+            {/* ── Header ─────────────────────────────────────────────────────── */}
+            <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <h1 className="text-2xl font-black text-white tracking-tight">AI Model Arena</h1>
-                <p className="text-sm text-white/50">Compare free AI models side-by-side · Ranked by eBay optimization score</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs">
-              <Zap className="w-3 h-3 mr-1" /> {freeModels.length} Free Models
-            </Badge>
-            <Badge className="bg-violet-500/20 text-violet-300 border border-violet-500/30 text-xs">
-              <Crown className="w-3 h-3 mr-1" /> {premiumModels.length} Premium Models
-            </Badge>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ── Left Panel: Input + Model Selection ────────────────────── */}
-          <div className="lg:col-span-1 space-y-4">
-            {/* Input Tabs */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
-              <div className="p-4 border-b border-white/5">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-400" /> Product Input
-                </h2>
-              </div>
-              <div className="p-4 space-y-3">
-                <Tabs value={inputTab} onValueChange={v => setInputTab(v as "url" | "manual")}>
-                  <TabsList className="w-full bg-white/5">
-                    <TabsTrigger value="url" className="flex-1 text-xs">From URL</TabsTrigger>
-                    <TabsTrigger value="manual" className="flex-1 text-xs">Manual</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="url" className="mt-3">
-                    <Input
-                      placeholder="AliExpress / Amazon / Temu URL..."
-                      value={productUrl}
-                      onChange={e => setProductUrl(e.target.value)}
-                      className="bg-white/5 border-white/10 text-white placeholder:text-white/30 text-sm"
-                      data-testid="arena-url-input"
-                    />
-                    <p className="text-[10px] text-white/30 mt-1.5">The product will be auto-scraped before models run.</p>
-                  </TabsContent>
-                  <TabsContent value="manual" className="mt-3 space-y-2">
-                    <Input
-                      placeholder="Product name / title..."
-                      value={productTitle}
-                      onChange={e => setProductTitle(e.target.value)}
-                      className="bg-white/5 border-white/10 text-white placeholder:text-white/30 text-sm"
-                      data-testid="arena-title-input"
-                    />
-                    <Textarea
-                      placeholder="Product description (optional)..."
-                      value={productDescription}
-                      onChange={e => setProductDescription(e.target.value)}
-                      className="bg-white/5 border-white/10 text-white placeholder:text-white/30 text-sm resize-none"
-                      rows={4}
-                      data-testid="arena-description-input"
-                    />
-                  </TabsContent>
-                </Tabs>
-              </div>
-            </div>
-
-            {/* CTA Buttons */}
-            <div className="space-y-2">
-              <Button
-                className="w-full bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white font-bold h-11 shadow-lg shadow-violet-500/20"
-                disabled={!canRun || isLoading}
-                onClick={() => compareMutation.mutate()}
-                data-testid="arena-run-btn"
-              >
-                {compareMutation.isPending ? (
-                  <><RotateCcw className="w-4 h-4 mr-2 animate-spin" /> Running {selectedModels.size} models...</>
-                ) : (
-                  <><Play className="w-4 h-4 mr-2" /> Run Arena ({selectedModels.size} models)</>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 font-semibold h-10"
-                disabled={!canRun || isLoading}
-                onClick={() => autoMutation.mutate()}
-                data-testid="arena-auto-btn"
-              >
-                {autoMutation.isPending ? (
-                  <><RotateCcw className="w-4 h-4 mr-2 animate-spin" /> Auto-picking best...</>
-                ) : (
-                  <><Zap className="w-4 h-4 mr-2" /> One-Click Full Auto</>
-                )}
-              </Button>
-              <p className="text-[10px] text-white/30 text-center">Full Auto runs all fast free models and picks the highest-scoring result automatically.</p>
-            </div>
-
-            {/* Model Selection */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
-              <div className="p-3 border-b border-white/5 flex items-center justify-between">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-white/50" /> Select Models
-                </h2>
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => handleSelectAll(true)} className="text-[10px] text-emerald-400 hover:text-emerald-300">+Free</button>
-                  <span className="text-white/20">·</span>
-                  <button onClick={handleDeselectAll} className="text-[10px] text-white/40 hover:text-white/60">Clear</button>
-                </div>
-              </div>
-
-              <div className="p-3 space-y-1 max-h-[480px] overflow-y-auto">
-                <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-2 px-1">Free Tier (No Credits)</p>
-                {freeModels.map(model => (
-                  <ModelCheckbox
-                    key={model.id}
-                    model={model}
-                    checked={selectedModels.has(model.id)}
-                    onChange={v => {
-                      const s = new Set(selectedModels);
-                      v ? s.add(model.id) : s.delete(model.id);
-                      setSelectedModels(s);
-                    }}
-                  />
-                ))}
-
-                <p className="text-[10px] text-violet-400 font-semibold uppercase tracking-wider mt-4 mb-2 px-1">Premium (Requires Credits)</p>
-                {premiumModels.map(model => (
-                  <ModelCheckbox
-                    key={model.id}
-                    model={model}
-                    checked={selectedModels.has(model.id)}
-                    onChange={v => {
-                      const s = new Set(selectedModels);
-                      v ? s.add(model.id) : s.delete(model.id);
-                      setSelectedModels(s);
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Strategy tip */}
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
-              <p className="text-[10px] font-semibold text-blue-300 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Info className="w-3 h-3" /> Recommended Strategy
-              </p>
-              <ul className="space-y-1">
-                {[
-                  "Run 3–5 free models for best variety",
-                  "Gemini 2.0 Flash = fastest + most structured",
-                  "Llama 3.3 70B = best natural descriptions",
-                  "Use Full Auto for instant single best result",
-                ].map((tip, i) => (
-                  <li key={i} className="text-[10px] text-white/50 flex items-start gap-1">
-                    <span className="text-blue-400">·</span> {tip}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* ── Right Panel: Results ──────────────────────────────────── */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Loading state */}
-            {isLoading && (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6 text-center">
-                  <div className="w-12 h-12 rounded-full border-2 border-violet-500 border-t-transparent animate-spin mx-auto mb-4" />
-                  <p className="text-white font-semibold">Running {selectedModels.size} models in parallel...</p>
-                  <p className="text-white/40 text-sm mt-1">Generating and scoring eBay listings simultaneously</p>
-                  <div className="mt-4 grid grid-cols-2 gap-2 max-w-sm mx-auto text-xs text-white/50">
-                    {Array.from(selectedModels).map(id => {
-                      const m = allModels.find(m => m.id === id);
-                      return m ? (
-                        <div key={id} className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2 py-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-                          {m.name}
-                        </div>
-                      ) : null;
-                    })}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                    <Cpu className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-black text-white tracking-tight">AI Model Arena</h1>
+                    <p className="text-sm text-white/60">Compare free AI models side-by-side with stronger mobile UX and live ranking feedback</p>
                   </div>
                 </div>
               </div>
-            )}
-
-            {/* No results placeholder */}
-            {!isLoading && results.length === 0 && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-12 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600/20 to-blue-600/20 flex items-center justify-center mx-auto mb-4">
-                  <Trophy className="w-8 h-8 text-violet-400" />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Arena Ready</h3>
-                <p className="text-white/40 text-sm max-w-xs mx-auto">
-                  Select models and enter a product to see them compete. Each model generates a listing and gets scored for eBay ranking potential.
-                </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs">
+                  <Zap className="w-3 h-3 mr-1" /> Mobile Optimized
+                </Badge>
+                <Badge className="bg-sky-500/15 text-sky-300 border border-sky-500/30 text-xs">
+                  <BarChart2 className="w-3 h-3 mr-1" /> Live Ranking Scores
+                </Badge>
               </div>
-            )}
+            </div>
 
-            {/* Results */}
-            {!isLoading && results.length > 0 && (
-              <>
-                {/* Summary bar */}
-                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-yellow-400" />
-                    <span className="text-sm font-bold text-white">{results.filter(r => r.status === "success").length} Results</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs">
+                <Zap className="w-3 h-3 mr-1" /> {freeModels.length} Free Models
+              </Badge>
+              <Badge className="bg-violet-500/20 text-violet-300 border border-violet-500/30 text-xs">
+                <Crown className="w-3 h-3 mr-1" /> {premiumModels.length} Premium Models
+              </Badge>
+              <Badge className="bg-white/10 text-white/80 border border-white/10 text-xs">
+                <Shield className="w-3 h-3 mr-1" /> Better contrast on light/mobile
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* ── Left Panel: Input + Model Selection ────────────────────── */}
+              <div className="lg:col-span-1 space-y-4">
+                {/* Input Tabs */}
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+                  <div className="p-4 border-b border-white/5">
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-blue-400" /> Product Input
+                    </h2>
                   </div>
-                  {results[0]?.status === "success" && (
-                    <>
-                      <div className="h-4 w-px bg-white/10" />
-                      <div className="flex items-center gap-2">
-                        <Crown className="w-4 h-4 text-yellow-400" />
-                        <span className="text-xs text-white/60">Winner: <span className="text-white font-semibold">{results[0].modelName}</span> · Score {results[0].optimizationScore.overall}/100</span>
-                      </div>
-                    </>
-                  )}
-                  <div className="ml-auto flex items-center gap-1.5">
-                    {(["all", "free", "premium"] as const).map(t => (
-                      <button
-                        key={t}
-                        onClick={() => setFilterTab(t)}
-                        className={`text-xs px-2.5 py-1 rounded-lg capitalize transition-colors ${filterTab === t ? "bg-blue-600 text-white" : "bg-white/5 text-white/50 hover:bg-white/10"}`}
-                      >
-                        {t}
-                      </button>
+                  <div className="p-4 space-y-3">
+                    <Tabs value={inputTab} onValueChange={v => setInputTab(v as "url" | "manual")}>
+                      <TabsList className="w-full bg-white/5">
+                        <TabsTrigger value="url" className="flex-1 text-xs">From URL</TabsTrigger>
+                        <TabsTrigger value="manual" className="flex-1 text-xs">Manual</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="url" className="mt-3">
+                        <Input
+                          placeholder="AliExpress / Amazon / Temu URL..."
+                          value={productUrl}
+                          onChange={e => setProductUrl(e.target.value)}
+                          className="bg-white/5 border-white/10 text-white placeholder:text-white/30 text-sm"
+                          data-testid="arena-url-input"
+                        />
+                        <p className="text-[10px] text-white/30 mt-1.5">The product will be auto-scraped before models run.</p>
+                      </TabsContent>
+                      <TabsContent value="manual" className="mt-3 space-y-2">
+                        <Input
+                          placeholder="Product name / title..."
+                          value={productTitle}
+                          onChange={e => setProductTitle(e.target.value)}
+                          className="bg-white/5 border-white/10 text-white placeholder:text-white/30 text-sm"
+                          data-testid="arena-title-input"
+                        />
+                        <Textarea
+                          placeholder="Product description (optional)..."
+                          value={productDescription}
+                          onChange={e => setProductDescription(e.target.value)}
+                          className="bg-white/5 border-white/10 text-white placeholder:text-white/30 text-sm resize-none"
+                          rows={4}
+                          data-testid="arena-description-input"
+                        />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                </div>
+
+                {/* CTA Buttons */}
+                <div className="space-y-2">
+                  <Button
+                    className="w-full bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white font-bold h-11 shadow-lg shadow-violet-500/20"
+                    disabled={!canRun || isLoading}
+                    onClick={() => compareMutation.mutate()}
+                    data-testid="arena-run-btn"
+                  >
+                    {compareMutation.isPending ? (
+                      <><RotateCcw className="w-4 h-4 mr-2 animate-spin" /> Running {selectedModels.size} models...</>
+                    ) : (
+                      <><Play className="w-4 h-4 mr-2" /> Run Arena ({selectedModels.size} models)</>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 font-semibold h-10"
+                    disabled={!canRun || isLoading}
+                    onClick={() => autoMutation.mutate()}
+                    data-testid="arena-auto-btn"
+                  >
+                    {autoMutation.isPending ? (
+                      <><RotateCcw className="w-4 h-4 mr-2 animate-spin" /> Auto-picking best...</>
+                    ) : (
+                      <><Zap className="w-4 h-4 mr-2" /> One-Click Full Auto</>
+                    )}
+                  </Button>
+                  <p className="text-[10px] text-white/30 text-center">Full Auto runs all fast free models and picks the highest-scoring result automatically.</p>
+                </div>
+
+                {/* Model Selection */}
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+                  <div className="p-3 border-b border-white/5 flex items-center justify-between">
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Cpu className="w-4 h-4 text-white/50" /> Select Models
+                    </h2>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => handleSelectAll(true)} className="text-[10px] text-emerald-400 hover:text-emerald-300">+Free</button>
+                      <span className="text-white/20">·</span>
+                      <button onClick={handleDeselectAll} className="text-[10px] text-white/40 hover:text-white/60">Clear</button>
+                    </div>
+                  </div>
+
+                  <div className="p-3 space-y-1 max-h-[480px] overflow-y-auto">
+                    <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-2 px-1">Free Tier (No Credits)</p>
+                    {freeModels.map(model => (
+                      <ModelCheckbox
+                        key={model.id}
+                        model={model}
+                        checked={selectedModels.has(model.id)}
+                        onChange={v => {
+                          const s = new Set(selectedModels);
+                          v ? s.add(model.id) : s.delete(model.id);
+                          setSelectedModels(s);
+                        }}
+                      />
+                    ))}
+
+                    <p className="text-[10px] text-violet-400 font-semibold uppercase tracking-wider mt-4 mb-2 px-1">Premium (Requires Credits)</p>
+                    {premiumModels.map(model => (
+                      <ModelCheckbox
+                        key={model.id}
+                        model={model}
+                        checked={selectedModels.has(model.id)}
+                        onChange={v => {
+                          const s = new Set(selectedModels);
+                          v ? s.add(model.id) : s.delete(model.id);
+                          setSelectedModels(s);
+                        }}
+                      />
                     ))}
                   </div>
                 </div>
 
-                {/* Cards grid */}
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  {filteredResults.map((entry, i) => (
-                    <ModelCard
-                      key={entry.modelId}
-                      entry={entry}
-                      rank={i}
-                      onSelect={(e) => {
-                        toast({
-                          title: "Listing saved",
-                          description: `${e.modelName}'s output saved to your listing history.`,
-                        });
-                      }}
-                      onPreview={setPreviewEntry}
-                    />
-                  ))}
+                {/* Strategy tip */}
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                  <p className="text-[10px] font-semibold text-blue-300 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <Info className="w-3 h-3" /> Recommended Strategy
+                  </p>
+                  <ul className="space-y-1">
+                    {[
+                      "Run 3–5 free models for best variety",
+                      "Gemini 2.0 Flash = fastest + most structured",
+                      "Llama 3.3 70B = best natural descriptions",
+                      "Use Full Auto for instant single best result",
+                    ].map((tip, i) => (
+                      <li key={i} className="text-[10px] text-white/50 flex items-start gap-1">
+                        <span className="text-blue-400">·</span> {tip}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </>
-            )}
+              </div>
+
+              {/* ── Right Panel: Results ──────────────────────────────────── */}
+              <div className="lg:col-span-2 space-y-4">
+                {/* Loading state */}
+                {isLoading && (
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6 text-center">
+                      <div className="w-12 h-12 rounded-full border-2 border-violet-500 border-t-transparent animate-spin mx-auto mb-4" />
+                      <p className="text-white font-semibold">Running {selectedModels.size} models in parallel...</p>
+                      <p className="text-white/40 text-sm mt-1">Generating and scoring eBay listings simultaneously</p>
+                      <div className="mt-4 grid grid-cols-2 gap-2 max-w-sm mx-auto text-xs text-white/50">
+                        {Array.from(selectedModels).map(id => {
+                          const m = allModels.find(m => m.id === id);
+                          return m ? (
+                            <div key={id} className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2 py-1.5">
+                              <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+                              {m.name}
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* No results placeholder */}
+                {!isLoading && results.length === 0 && (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-12 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600/20 to-blue-600/20 flex items-center justify-center mx-auto mb-4">
+                      <Trophy className="w-8 h-8 text-violet-400" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white mb-2">Arena Ready</h3>
+                    <p className="text-white/40 text-sm max-w-xs mx-auto">
+                      Select models and enter a product to see them compete. Each model generates a listing and gets scored for eBay ranking potential.
+                    </p>
+                  </div>
+                )}
+
+                {/* Results */}
+                {!isLoading && results.length > 0 && (
+                  <>
+                    {/* Summary bar */}
+                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-center gap-4 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-yellow-400" />
+                        <span className="text-sm font-bold text-white">{results.filter(r => r.status === "success").length} Results</span>
+                      </div>
+                      {results[0]?.status === "success" && (
+                        <>
+                          <div className="h-4 w-px bg-white/10" />
+                          <div className="flex items-center gap-2">
+                            <Crown className="w-4 h-4 text-yellow-400" />
+                            <span className="text-xs text-white/60">Winner: <span className="text-white font-semibold">{results[0].modelName}</span> · Score {results[0].optimizationScore.overall}/100</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="ml-auto flex items-center gap-1.5">
+                        {(["all", "free", "premium"] as const).map(t => (
+                          <button
+                            key={t}
+                            onClick={() => setFilterTab(t)}
+                            className={`text-xs px-2.5 py-1 rounded-lg capitalize transition-colors ${filterTab === t ? "bg-blue-600 text-white" : "bg-white/5 text-white/50 hover:bg-white/10"}`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Cards grid */}
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      {filteredResults.map((entry, i) => (
+                        <ModelCard
+                          key={entry.modelId}
+                          entry={entry}
+                          rank={i}
+                          onSelect={(e) => {
+                            toast({
+                              title: "Listing saved",
+                              description: `${e.modelName}'s output saved to your listing history.`,
+                            });
+                          }}
+                          onPreview={setPreviewEntry}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

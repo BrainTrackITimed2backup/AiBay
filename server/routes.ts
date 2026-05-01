@@ -43,6 +43,108 @@ import { z } from "zod";
 import archiver from "archiver";
 import axios from "axios";
 
+type ListingSpecificEntry = {
+  name: string;
+  value: string;
+  source: "scraped" | "ai";
+};
+
+function normalizeSpecificRecord(input: unknown): Record<string, string> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return Object.fromEntries(
+    Object.entries(input as Record<string, unknown>)
+      .filter(([, value]) => value != null && String(value).trim())
+      .map(([key, value]) => [key, String(value).trim()])
+  );
+}
+
+function mergeItemSpecifics(params: {
+  scrapedSpecs?: Record<string, string>;
+  aiSpecifics?: { name?: string; value?: string }[];
+  extractedSpecifics?: { name?: string; value?: string }[];
+}): ListingSpecificEntry[] {
+  const merged = new Map<string, ListingSpecificEntry>();
+  const add = (name: string, value: string, source: "scraped" | "ai") => {
+    const cleanName = name.trim();
+    const cleanValue = value.trim();
+    if (!cleanName || !cleanValue) return;
+    const key = cleanName.toLowerCase();
+    if (merged.has(key)) return;
+    merged.set(key, { name: cleanName, value: cleanValue, source });
+  };
+
+  for (const [name, value] of Object.entries(params.scrapedSpecs || {})) add(name, value, "scraped");
+  for (const item of params.aiSpecifics || []) {
+    if (item?.name && item?.value) add(item.name, item.value, "ai");
+  }
+  for (const item of params.extractedSpecifics || []) {
+    if (item?.name && item?.value) add(item.name, item.value, "ai");
+  }
+
+  return Array.from(merged.values()).slice(0, 12);
+}
+
+async function buildListingIntelligence(params: {
+  generatedTitle: string;
+  generatedHtml: string;
+  rawTitle: string;
+  productDescription?: string;
+  scrapedSpecs?: Record<string, string>;
+  aiSpecifics?: { name?: string; value?: string }[];
+  images?: string[];
+  platform?: string;
+  price?: number;
+  brand?: string;
+  categoryBreadcrumb?: string;
+  lifestylePrompts?: string[];
+}) {
+  const extractedSpecifics = await extractItemSpecifics(
+    `${params.rawTitle}\n${params.productDescription || ""}`.trim(),
+    params.categoryBreadcrumb || params.productDescription || "General",
+    params.scrapedSpecs || {}
+  ).catch(() => []);
+
+  const itemSpecifics = mergeItemSpecifics({
+    scrapedSpecs: params.scrapedSpecs,
+    aiSpecifics: params.aiSpecifics,
+    extractedSpecifics,
+  });
+
+  const suggestedCategoriesRaw = await suggestCategories(
+    params.generatedTitle,
+    params.productDescription || params.categoryBreadcrumb || ""
+  ).catch(() => []);
+
+  const suggestedCategories = suggestedCategoriesRaw.map((cat) => ({
+    name: cat.name,
+    breadcrumb: cat.categoryName,
+    categoryId: cat.categoryId,
+    confidence: cat.confidence,
+    reason: `Matched from generated title and product context for ${cat.categoryName}`,
+  }));
+
+  const titleScore = scoreFullListing({
+    title: params.generatedTitle,
+    htmlDescription: params.generatedHtml,
+    itemSpecifics,
+    imageCount: params.images?.length || 0,
+    rawTitle: params.rawTitle,
+  });
+
+  return {
+    itemSpecifics,
+    suggestedCategories,
+    titleScore,
+    sourceData: {
+      platform: params.platform,
+      price: params.price,
+      brand: params.brand || params.scrapedSpecs?.Brand || params.scrapedSpecs?.brand,
+      categoryBreadcrumb: params.categoryBreadcrumb,
+      lifestylePrompts: params.lifestylePrompts || [],
+    },
+  };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -55,6 +157,18 @@ export async function registerRoutes(
       const scrapedData = await scrapeProduct(productUrl);
       const aiContent = await generateListingContent(scrapedData, titleOverride || undefined);
       const processedImages = await processImages(scrapedData.images);
+      const scrapedSpecs = normalizeSpecificRecord(scrapedData.specifications);
+      const intelligence = await buildListingIntelligence({
+        generatedTitle: aiContent.title,
+        generatedHtml: aiContent.html_description,
+        rawTitle: scrapedData.title || productUrl,
+        productDescription: scrapedData.description || "",
+        scrapedSpecs,
+        aiSpecifics: aiContent.itemSpecifics,
+        images: processedImages,
+        platform: "legacy-scraper",
+        categoryBreadcrumb: scrapedData.categoryBreadcrumb,
+      });
 
       const listing = await storage.createListing({
         productUrl,
@@ -62,6 +176,10 @@ export async function registerRoutes(
         generatedHtml: aiContent.html_description,
         images: processedImages,
         rawData: scrapedData,
+        itemSpecifics: intelligence.itemSpecifics,
+        suggestedCategories: intelligence.suggestedCategories,
+        titleScore: intelligence.titleScore,
+        sourceData: intelligence.sourceData,
       });
 
       res.json(listing);
@@ -128,6 +246,101 @@ export async function registerRoutes(
   // ─── Health Check ────────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/live/ops", async (_req, res) => {
+    try {
+      const [
+        statsListings,
+        statsWatchlist,
+        statsSellers,
+        statsKeywordsToday,
+        recentListings,
+        recentKeywordSearches,
+        recentSupplierSearches,
+        trackedSellers,
+        currentTemplates,
+        currentPlans,
+        settings,
+      ] = await Promise.all([
+        storage.getListingsCount(),
+        storage.getWatchlistCount(),
+        storage.getTrackedSellersCount(),
+        storage.getKeywordSearchesToday(),
+        storage.getListings(),
+        storage.getKeywordSearches(5),
+        storage.getSupplierSearchHistory(5),
+        storage.getTrackedSellers(),
+        storage.getTemplates(),
+        storage.getSubscriptionPlans(),
+        storage.getAdminSettings(),
+      ]);
+
+      const activity = [
+        ...recentListings.slice(0, 4).map((listing) => ({
+          id: `listing-${listing.id}`,
+          type: "listing",
+          label: listing.generatedTitle,
+          meta: "AI listing generated",
+          href: `/listing/${listing.id}`,
+          timestamp: listing.createdAt,
+        })),
+        ...recentKeywordSearches.slice(0, 4).map((search) => ({
+          id: `keyword-${search.id}`,
+          type: "keyword",
+          label: search.query,
+          meta: `Market research · ${search.marketplace}`,
+          href: `/market-research?keyword=${encodeURIComponent(search.query)}`,
+          timestamp: search.createdAt,
+        })),
+        ...recentSupplierSearches.slice(0, 4).map((search) => ({
+          id: `supplier-${search.id}`,
+          type: "supplier",
+          label: search.query,
+          meta: `Supplier lookup · ${search.resultCount || 0} results`,
+          href: `/supplier-finder?q=${encodeURIComponent(search.query)}`,
+          timestamp: search.createdAt,
+        })),
+        ...trackedSellers.slice(0, 4).map((seller) => ({
+          id: `seller-${seller.id}`,
+          type: "seller",
+          label: seller.username,
+          meta: `${seller.totalListings || 0} listings tracked`,
+          href: `/top-sellers?seller=${encodeURIComponent(seller.username)}`,
+          timestamp: seller.lastCheckedAt || seller.createdAt,
+        })),
+      ]
+        .filter((entry) => entry.timestamp)
+        .sort((a, b) => new Date(String(b.timestamp)).getTime() - new Date(String(a.timestamp)).getTime())
+        .slice(0, 8);
+
+      res.json({
+        timestamp: new Date().toISOString(),
+        health: {
+          totalListings: statsListings,
+          totalWatchlist: statsWatchlist,
+          totalTrackedSellers: statsSellers,
+          keywordSearchesToday: statsKeywordsToday,
+        },
+        status: {
+          ebayConfigured: !!getEbayAppId(),
+          registrationEnabled: settings?.registrationEnabled ?? true,
+          maintenanceMode: settings?.maintenanceMode ?? false,
+          siteName: settings?.siteName || "AIBAY",
+        },
+        catalog: {
+          templateCount: currentTemplates.length,
+          planCount: currentPlans.length,
+          activePlanCount: currentPlans.filter((plan) => plan.isActive).length,
+          arenaModelCount: MODEL_REGISTRY.length,
+          freeArenaModelCount: MODEL_REGISTRY.filter((model) => model.free).length,
+        },
+        activity,
+      });
+    } catch (error) {
+      console.error("Live ops error:", error);
+      res.status(500).json({ message: error instanceof Error ? error.message : "Error" });
+    }
   });
 
   // ─── eBay Status ─────────────────────────────────────────────────────────────
@@ -406,17 +619,7 @@ export async function registerRoutes(
 
       const productText = (scrapedData.description || "") + " " + Object.entries(scrapedData.specifications || {}).map(([k, v]) => `${k}: ${v}`).join(" ");
 
-      const [titleScoreResult, categoriesResult, lifestylePrompts] = await Promise.all([
-        scoreTitleSEO(aiContent.title),
-        suggestCategories(aiContent.title, scrapedData.description || ""),
-        generateLifestylePrompts(aiContent.title, scrapedData.description || ""),
-      ]);
-
-      const itemSpecificsFixed = await extractItemSpecifics(
-        productText,
-        categoriesResult?.[0]?.name || "General",
-        scrapedData.specifications || {}
-      ).catch(() => []);
+      const lifestylePrompts = await generateLifestylePrompts(aiContent.title, scrapedData.description || "");
 
       // Run Replicate image pipeline in parallel (graceful degradation when token absent)
       const { upscaleImagesBatch: upscaleBatch } = await import("./services/replicateService");
@@ -438,24 +641,33 @@ export async function registerRoutes(
         });
       }
 
+      const intelligence = await buildListingIntelligence({
+        generatedTitle: aiContent.title,
+        generatedHtml: aiContent.html_description,
+        rawTitle: scrapedData.title || titleOverride || productUrl,
+        productDescription: productText,
+        scrapedSpecs: normalizeSpecificRecord(scrapedData.specifications),
+        aiSpecifics: aiContent.itemSpecifics,
+        images: finalImageUrls,
+        platform: scrapedData.platform,
+        price: scrapedData.price,
+        brand: scrapedData.brand,
+        categoryBreadcrumb: scrapedData.categoryBreadcrumb,
+        lifestylePrompts,
+      });
+
       const listing = await storage.createListing({
         productUrl,
         generatedTitle: aiContent.title,
         generatedHtml: aiContent.html_description,
         images: finalImageUrls,
         rawData: scrapedData,
-        itemSpecifics: itemSpecificsFixed,
-        suggestedCategories: categoriesResult,
-        titleScore: titleScoreResult,
+        itemSpecifics: intelligence.itemSpecifics,
+        suggestedCategories: intelligence.suggestedCategories,
+        titleScore: intelligence.titleScore,
         processedImages: processedImageMeta,
         lifestyleImages: lifestyleImageUrls,
-        sourceData: {
-          platform: scrapedData.platform,
-          price: scrapedData.price,
-          brand: scrapedData.brand,
-          categoryBreadcrumb: scrapedData.categoryBreadcrumb,
-          lifestylePrompts,
-        },
+        sourceData: intelligence.sourceData,
       });
 
       res.json(listing);
@@ -497,21 +709,23 @@ export async function registerRoutes(
       const aiContent = await generateListingContent(scrapedData, titleOverride || undefined);
       const rawImages = imageUrls.length > 0 ? await processImages(imageUrls) : [];
 
-      const [titleScoreResult, categoriesResult, lifestylePrompts] = await Promise.all([
-        scoreTitleSEO(aiContent.title),
-        suggestCategories(aiContent.title, fullDescription),
-        generateLifestylePrompts(aiContent.title, fullDescription),
-      ]);
-
-      const itemSpecificsFixed = await extractItemSpecifics(
-        fullDescription,
-        categoriesResult?.[0]?.name || category || "General",
-        scrapedData.specifications
-      ).catch(() => []);
+      const lifestylePrompts = await generateLifestylePrompts(aiContent.title, fullDescription);
 
       const { upscaleImagesBatch: upscaleBatch } = await import("./services/replicateService");
       const upscaleResults = await upscaleBatch(rawImages.slice(0, 10));
       const finalImageUrls = upscaleResults.map(r => r.upscaledUrl);
+      const intelligence = await buildListingIntelligence({
+        generatedTitle: aiContent.title,
+        generatedHtml: aiContent.html_description,
+        rawTitle: productName,
+        productDescription: fullDescription,
+        scrapedSpecs: normalizeSpecificRecord(scrapedData.specifications),
+        aiSpecifics: aiContent.itemSpecifics,
+        images: finalImageUrls,
+        platform: "manual",
+        categoryBreadcrumb: category || undefined,
+        lifestylePrompts,
+      });
 
       const listing = await storage.createListing({
         productUrl: scrapedData.sourceUrl,
@@ -519,18 +733,12 @@ export async function registerRoutes(
         generatedHtml: aiContent.html_description,
         images: finalImageUrls,
         rawData: scrapedData,
-        itemSpecifics: itemSpecificsFixed,
-        suggestedCategories: categoriesResult,
-        titleScore: titleScoreResult,
+        itemSpecifics: intelligence.itemSpecifics,
+        suggestedCategories: intelligence.suggestedCategories,
+        titleScore: intelligence.titleScore,
         processedImages: [],
         lifestyleImages: [],
-        sourceData: {
-          platform: "manual",
-          price: undefined,
-          brand: undefined,
-          categoryBreadcrumb: category || undefined,
-          lifestylePrompts,
-        },
+        sourceData: intelligence.sourceData,
       });
 
       res.json(listing);
@@ -573,16 +781,7 @@ export async function registerRoutes(
             const finalImageUrls = upscaleResults.map(r => r.upscaledUrl);
             const processedImageMeta = upscaleResults.map(r => ({ original: r.url, processed: r.upscaledUrl, status: r.status }));
 
-            const [titleScore, categories, lifestylePrompts] = await Promise.all([
-              scoreTitleSEO(aiContent.title),
-              suggestCategories(aiContent.title, scrapedData.description || ""),
-              generateLifestylePrompts(aiContent.title, scrapedData.description || ""),
-            ]);
-            const itemSpecifics = await extractItemSpecifics(
-              bulkText,
-              categories?.[0]?.name || "General",
-              scrapedData.specifications || {}
-            );
+            const lifestylePrompts = await generateLifestylePrompts(aiContent.title, scrapedData.description || "");
 
             const lifestyleImageUrls: string[] = [];
             if (isReplicateConfigured() && lifestylePrompts.length > 0) {
@@ -590,18 +789,33 @@ export async function registerRoutes(
               settled.forEach(r => { if (r.status === "fulfilled") lifestyleImageUrls.push(r.value); });
             }
 
+            const intelligence = await buildListingIntelligence({
+              generatedTitle: aiContent.title,
+              generatedHtml: aiContent.html_description,
+              rawTitle: scrapedData.title || productUrl,
+              productDescription: bulkText,
+              scrapedSpecs: normalizeSpecificRecord(scrapedData.specifications),
+              aiSpecifics: aiContent.itemSpecifics,
+              images: finalImageUrls,
+              platform: scrapedData.platform,
+              price: scrapedData.price,
+              brand: scrapedData.brand,
+              categoryBreadcrumb: scrapedData.categoryBreadcrumb,
+              lifestylePrompts,
+            });
+
             const listing = await storage.createListing({
               productUrl,
               generatedTitle: aiContent.title,
               generatedHtml: aiContent.html_description,
               images: finalImageUrls,
               rawData: scrapedData,
-              itemSpecifics,
-              suggestedCategories: categories,
-              titleScore,
+              itemSpecifics: intelligence.itemSpecifics,
+              suggestedCategories: intelligence.suggestedCategories,
+              titleScore: intelligence.titleScore,
               processedImages: processedImageMeta,
               lifestyleImages: lifestyleImageUrls,
-              sourceData: { platform: scrapedData.platform, price: scrapedData.price, brand: scrapedData.brand, categoryBreadcrumb: scrapedData.categoryBreadcrumb, lifestylePrompts },
+              sourceData: intelligence.sourceData,
               bulkGroupId: String(job.id),
             });
             results.push({ url: productUrl, listingId: listing.id });
@@ -1463,12 +1677,28 @@ export async function registerRoutes(
     try {
       const { title, htmlDescription, images, productUrl, productData } = req.body;
       if (!title) return res.status(400).json({ message: "title is required" });
+      const normalizedProductData = (productData && typeof productData === "object" && !Array.isArray(productData)) ? productData as Record<string, any> : {};
+      const intelligence = await buildListingIntelligence({
+        generatedTitle: title,
+        generatedHtml: htmlDescription || "",
+        rawTitle: normalizedProductData.title || title,
+        productDescription: normalizedProductData.description || "",
+        scrapedSpecs: normalizeSpecificRecord(normalizedProductData.specs || normalizedProductData.specifications),
+        images: images || [],
+        platform: "arena",
+        brand: normalizedProductData.brand,
+        categoryBreadcrumb: normalizedProductData.categoryBreadcrumb,
+      });
       const listing = await storage.createListing({
         productUrl: productUrl || "arena",
         generatedTitle: title,
         generatedHtml: htmlDescription || "",
         images: images || [],
-        rawData: productData || {},
+        rawData: normalizedProductData,
+        itemSpecifics: intelligence.itemSpecifics,
+        suggestedCategories: intelligence.suggestedCategories,
+        titleScore: intelligence.titleScore,
+        sourceData: intelligence.sourceData,
       });
       res.json(listing);
     } catch (error) {
@@ -1502,6 +1732,18 @@ export async function registerRoutes(
         return res.status(500).json({ message: "All AI models failed — please try again" });
       }
 
+      const intelligence = await buildListingIntelligence({
+        generatedTitle: winner.title,
+        generatedHtml: winner.htmlDescription,
+        rawTitle: resolvedProductData.title,
+        productDescription: resolvedProductData.description || "",
+        scrapedSpecs: normalizeSpecificRecord(resolvedProductData.specs || resolvedProductData.specifications),
+        images: resolvedProductData.images || [],
+        platform: productUrl ? "arena-auto-url" : "arena-auto-manual",
+        brand: resolvedProductData.brand,
+        categoryBreadcrumb: resolvedProductData.categoryBreadcrumb,
+      });
+
       // Save as a listing
       const listing = await storage.createListing({
         productUrl: productUrl || "manual",
@@ -1509,6 +1751,10 @@ export async function registerRoutes(
         generatedHtml: winner.htmlDescription,
         images: resolvedProductData.images || [],
         rawData: resolvedProductData,
+        itemSpecifics: intelligence.itemSpecifics,
+        suggestedCategories: intelligence.suggestedCategories,
+        titleScore: intelligence.titleScore,
+        sourceData: intelligence.sourceData,
       });
 
       res.json({ winner, listing, productData: resolvedProductData });

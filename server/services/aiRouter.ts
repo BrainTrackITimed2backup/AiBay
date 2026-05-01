@@ -68,18 +68,147 @@ const STOP_WORDS = new Set([
 const TITLE_TARGET = 68;
 const TITLE_MAX = 80;
 
-function optimizeTitle(rawTitle: string): string {
-  const words = rawTitle.split(/\s+/).filter(w => w.length > 1);
-  const keywords = words.filter(w => !STOP_WORDS.has(w.toLowerCase()));
-  let title = keywords.join(" ");
-  if (title.length < TITLE_TARGET && keywords.length < words.length) {
-    const fillers = words.filter(w => STOP_WORDS.has(w.toLowerCase()));
-    for (const f of fillers) {
-      if (title.length + f.length + 1 <= TITLE_TARGET) title += " " + f;
+const CONDITION_TERMS = ["new", "used", "refurbished", "open box", "pre-owned", "for parts"];
+const TITLE_NORMALIZATIONS: Record<string, string> = {
+  calluses: "callus",
+  callouses: "callus",
+  grinding: "grinder",
+  removers: "remover",
+  exfoliating: "exfoliating",
+  nano: "nano",
+};
+
+function cleanTitleText(value: string): string {
+  return value
+    .replace(/[|_]+/g, " ")
+    .replace(/[^A-Za-z0-9\s/-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeTitleToken(token: string): string {
+  let normalized = token
+    .toLowerCase()
+    .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "");
+
+  if (!normalized) return "";
+  if (TITLE_NORMALIZATIONS[normalized]) return TITLE_NORMALIZATIONS[normalized];
+  if (normalized.endsWith("ies") && normalized.length > 4) normalized = `${normalized.slice(0, -3)}y`;
+  else if (normalized.endsWith("es") && normalized.length > 4) normalized = normalized.slice(0, -2);
+  else if (normalized.endsWith("s") && normalized.length > 4 && !normalized.endsWith("ss")) normalized = normalized.slice(0, -1);
+  return TITLE_NORMALIZATIONS[normalized] || normalized;
+}
+
+function formatTitleToken(token: string): string {
+  if (!token) return "";
+  if (/[0-9]/.test(token) || token === token.toUpperCase()) return token.toUpperCase();
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
+function dedupeOrderedTokens(tokens: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const token of tokens) {
+    const cleaned = token.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9/-]+$/g, "");
+    const normalized = normalizeTitleToken(cleaned);
+    if (!normalized) continue;
+    if (normalized.length < 2) continue;
+    if (STOP_WORDS.has(normalized)) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(cleaned);
+  }
+
+  return result;
+}
+
+function extractSpecTokens(specs?: Record<string, string>): string[] {
+  if (!specs) return [];
+
+  const preferredKeys = ["brand", "model", "mpn", "type", "material", "color", "size"];
+  const preferredEntries = Object.entries(specs).sort((a, b) => {
+    const aIdx = preferredKeys.indexOf(a[0].toLowerCase());
+    const bIdx = preferredKeys.indexOf(b[0].toLowerCase());
+    return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+  });
+
+  return preferredEntries.flatMap(([, value]) =>
+    cleanTitleText(String(value || ""))
+      .split(/\s+/)
+      .filter((part) => part.length >= 2 && part.length <= 18)
+  );
+}
+
+function detectCondition(rawTitle: string, description?: string, specs?: Record<string, string>): string {
+  const combined = `${rawTitle} ${description || ""} ${Object.values(specs || {}).join(" ")}`.toLowerCase();
+  const matched = CONDITION_TERMS.find((term) => combined.includes(term));
+  if (!matched) return "New";
+  return matched
+    .split(" ")
+    .map((part) => formatTitleToken(part))
+    .join(" ");
+}
+
+function optimizeTitle(
+  rawTitle: string,
+  options: { description?: string; specs?: Record<string, string>; category?: string } = {}
+): string {
+  const cleanedTitle = cleanTitleText(rawTitle || "Product");
+  const cleanedDescription = cleanTitleText(options.description || "");
+  const cleanedCategory = cleanTitleText(options.category || "");
+  const condition = detectCondition(cleanedTitle, cleanedDescription, options.specs);
+
+  const titleTokens = dedupeOrderedTokens(cleanedTitle.split(/\s+/));
+  const descriptionTokens = dedupeOrderedTokens(cleanedDescription.split(/\s+/)).slice(0, 10);
+  const categoryTokens = dedupeOrderedTokens(cleanedCategory.split(/\s+/)).slice(0, 4);
+  const specTokens = dedupeOrderedTokens(extractSpecTokens(options.specs)).slice(0, 8);
+
+  const chosen: string[] = [];
+  const chosenNormalized = new Set<string>();
+  const pushToken = (token: string) => {
+    const normalized = normalizeTitleToken(token);
+    if (!normalized || chosenNormalized.has(normalized) || STOP_WORDS.has(normalized)) return;
+    chosenNormalized.add(normalized);
+    chosen.push(formatTitleToken(token));
+  };
+
+  for (const token of [...specTokens, ...titleTokens, ...descriptionTokens, ...categoryTokens]) {
+    pushToken(token);
+  }
+
+  let candidate = chosen.join(" ").replace(/\s+/g, " ").trim();
+  if (!candidate) candidate = cleanedTitle;
+
+  const conditionPresent = CONDITION_TERMS.some((term) => candidate.toLowerCase().includes(term));
+  if (!conditionPresent) candidate = `${candidate} ${condition}`.trim();
+
+  let tokens = candidate.split(/\s+/);
+  while (tokens.join(" ").length > TITLE_MAX && tokens.length > 1) {
+    const removableIndex = tokens.findLastIndex((token) => !CONDITION_TERMS.includes(token.toLowerCase()));
+    if (removableIndex === -1) break;
+    tokens.splice(removableIndex, 1);
+  }
+
+  candidate = tokens.join(" ").replace(/\s+/g, " ").trim();
+
+  if (candidate.length < 45) {
+    const fillerPool = dedupeOrderedTokens([
+      ...descriptionTokens,
+      ...categoryTokens,
+      ...specTokens,
+      ...titleTokens,
+    ]);
+    for (const token of fillerPool) {
+      const normalized = normalizeTitleToken(token);
+      if (candidate.toLowerCase().includes(normalized)) continue;
+      const next = `${candidate} ${formatTitleToken(token)}`.trim();
+      if (next.length > TITLE_TARGET) break;
+      candidate = next;
     }
   }
-  if (title.length > TITLE_MAX) title = title.slice(0, TITLE_MAX).trim();
-  return title;
+
+  return candidate.slice(0, TITLE_MAX).trim();
 }
 
 function buildDescription(productTitle: string, specs: Record<string,string> = {}, bullets: string[] = []): string {
@@ -173,14 +302,27 @@ OUTPUT: Valid JSON only (no markdown):
     try {
       const parsed = JSON.parse(raw);
       if (parsed.title && parsed.htmlDescription) {
-        return { ...parsed, html_description: parsed.htmlDescription };
+        const optimizedTitle = optimizeTitle(parsed.title, {
+          description: Array.isArray(parsed.bullets) ? parsed.bullets.join(" ") : productDescription,
+          specs,
+          category,
+        });
+        return {
+          ...parsed,
+          title: optimizedTitle,
+          html_description: parsed.htmlDescription,
+        };
       }
     } catch {}
   }
 
-  const optimized = optimizeTitle(productTitle);
+  const optimized = optimizeTitle(productTitle, {
+    description: productDescription,
+    specs,
+    category,
+  });
   const specsObj = specs || {};
-  const htmlDescription = buildDescription(productTitle, specsObj);
+  const htmlDescription = buildDescription(optimized, specsObj);
   return {
     title: optimized,
     htmlDescription,
