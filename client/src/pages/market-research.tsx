@@ -306,13 +306,13 @@ export default function MarketResearch() {
   const { data: analysis, isLoading, error } = useQuery<MarketAnalysis>({
     queryKey: ["/api/ebay/search", searchQuery?.keyword, searchQuery?.marketplace, searchQuery?.categoryId, searchQuery?.timeRange],
     queryFn: async () => {
-      if (!searchQuery) return null;
+      if (!searchQuery) throw new Error("Search query is required");
       const params = new URLSearchParams({ keyword: searchQuery.keyword, marketplace: searchQuery.marketplace });
       if (searchQuery.categoryId) params.set("categoryId", searchQuery.categoryId);
       if (searchQuery.timeRange) params.set("timeRange", searchQuery.timeRange);
       const res = await fetch(buildApiUrl(`/api/ebay/search?${params}`));
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "Failed"); }
-      return res.json();
+      return res.json<MarketAnalysis>();
     },
     enabled: !!searchQuery,
     staleTime: 5 * 60 * 1000,
@@ -459,7 +459,7 @@ export default function MarketResearch() {
                 <Info className="w-4 h-4 shrink-0" />
                 <span>
                   <strong>Sample data</strong> — eBay is unreachable from the development environment.
-                  All features work normally. Real live data loads automatically once deployed to Cloudflare + Render.
+                  All features work normally. Real live data loads automatically once the Cloudflare Worker and D1 database are configured.
                 </span>
               </div>
             )}

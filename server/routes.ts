@@ -1,5 +1,4 @@
 import type { Express, NextFunction, Request, Response } from "express";
-import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { scrapeProduct } from "./services/scraper";
@@ -43,10 +42,7 @@ import { z } from "zod";
 import archiver from "archiver";
 import axios from "axios";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<void> {
   const getConfiguredAdminPassword = () =>
     process.env.ADMIN_PASSWORD?.trim() || process.env.VITE_ADMIN_PASSWORD?.trim() || "Admin@Bay";
 
@@ -1635,10 +1631,9 @@ export async function registerRoutes(
     res.json({ models: MODEL_REGISTRY, provider: "Pollinations.AI", free: true, requiresKey: false });
   });
 
-  // ─── Health Check (required by Render for deployment health) ─────────────
+  // ─── Health Check ─────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", ts: Date.now(), version: "2.0.0" });
   });
 
-  return httpServer;
 }

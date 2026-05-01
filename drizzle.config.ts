@@ -1,14 +1,17 @@
 import { defineConfig } from "drizzle-kit";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
+if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_D1_DATABASE_ID || !process.env.CLOUDFLARE_API_TOKEN) {
+  throw new Error("CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_D1_DATABASE_ID and CLOUDFLARE_API_TOKEN must be set for D1 migrations");
 }
 
 export default defineConfig({
   out: "./migrations",
   schema: "./shared/schema.ts",
-  dialect: "postgresql",
+  dialect: "sqlite",
+  driver: "d1-http",
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+    databaseId: process.env.CLOUDFLARE_D1_DATABASE_ID,
+    token: process.env.CLOUDFLARE_API_TOKEN,
   },
 });

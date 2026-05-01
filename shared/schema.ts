@@ -1,24 +1,23 @@
-import { pgTable, text, serial, timestamp, jsonb, integer, numeric, boolean } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // ─── Listings ───────────────────────────────────────────────────────────────
-export const listings = pgTable("listings", {
-  id: serial("id").primaryKey(),
+export const listings = sqliteTable("listings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   productUrl: text("product_url").notNull(),
   generatedTitle: text("generated_title").notNull(),
   generatedHtml: text("generated_html").notNull(),
-  images: text("images").array().notNull(),
-  rawData: jsonb("raw_data"),
-  createdAt: timestamp("created_at").defaultNow(),
-  // AI Listing Engine 2.0 fields
-  itemSpecifics: jsonb("item_specifics"),
-  suggestedCategories: jsonb("suggested_categories"),
-  titleScore: jsonb("title_score"),
-  processedImages: jsonb("processed_images"),
-  lifestyleImages: text("lifestyle_images").array(),
-  imageMetadata: jsonb("image_metadata"),
-  sourceData: jsonb("source_data"),
+  images: text("images", { mode: "json" }).$type<string[]>().notNull(),
+  rawData: text("raw_data", { mode: "json" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  itemSpecifics: text("item_specifics", { mode: "json" }),
+  suggestedCategories: text("suggested_categories", { mode: "json" }),
+  titleScore: text("title_score", { mode: "json" }),
+  processedImages: text("processed_images", { mode: "json" }),
+  lifestyleImages: text("lifestyle_images", { mode: "json" }).$type<string[] | null>(),
+  imageMetadata: text("image_metadata", { mode: "json" }),
+  sourceData: text("source_data", { mode: "json" }),
   bulkGroupId: text("bulk_group_id"),
 });
 
@@ -42,14 +41,14 @@ export type Listing = typeof listings.$inferSelect;
 export type InsertListing = z.infer<typeof insertListingSchema>;
 
 // ─── Bulk Jobs ────────────────────────────────────────────────────────────────
-export const bulkJobs = pgTable("bulk_jobs", {
-  id: serial("id").primaryKey(),
+export const bulkJobs = sqliteTable("bulk_jobs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   status: text("status").notNull().default("pending"),
   totalUrls: integer("total_urls").notNull().default(0),
   completedCount: integer("completed_count").notNull().default(0),
   failedCount: integer("failed_count").notNull().default(0),
-  results: jsonb("results"),
-  createdAt: timestamp("created_at").defaultNow(),
+  results: text("results", { mode: "json" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
 export const insertBulkJobSchema = createInsertSchema(bulkJobs).omit({
@@ -63,41 +62,41 @@ export type BulkJob = typeof bulkJobs.$inferSelect;
 export type InsertBulkJob = z.infer<typeof insertBulkJobSchema>;
 
 // ─── Watchlist Items ─────────────────────────────────────────────────────────
-export const watchlistItems = pgTable("watchlist_items", {
-  id: serial("id").primaryKey(),
+export const watchlistItems = sqliteTable("watchlist_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   productTitle: text("product_title").notNull(),
   productUrl: text("product_url"),
   imageUrl: text("image_url"),
   searchKeyword: text("search_keyword"),
-  targetPrice: numeric("target_price", { precision: 10, scale: 2 }),
-  currentAvgPrice: numeric("current_avg_price", { precision: 10, scale: 2 }),
-  sellThroughRate: numeric("sell_through_rate", { precision: 5, scale: 2 }),
+  targetPrice: text("target_price"),
+  currentAvgPrice: text("current_avg_price"),
+  sellThroughRate: text("sell_through_rate"),
   notes: text("notes"),
   marketplace: text("marketplace").default("EBAY-US"),
-  lastCheckedAt: timestamp("last_checked_at"),
-  createdAt: timestamp("created_at").defaultNow(),
+  lastCheckedAt: integer("last_checked_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
-export const insertWatchlistItemSchema = createInsertSchema(watchlistItems).omit({
+export const insertWatchlistSchema = createInsertSchema(watchlistItems).omit({
   id: true,
   createdAt: true,
 });
 
 export type WatchlistItem = typeof watchlistItems.$inferSelect;
-export type InsertWatchlistItem = z.infer<typeof insertWatchlistItemSchema>;
+export type InsertWatchlistItem = z.infer<typeof insertWatchlistSchema>;
 
 // ─── Tracked Sellers ─────────────────────────────────────────────────────────
-export const trackedSellers = pgTable("tracked_sellers", {
-  id: serial("id").primaryKey(),
+export const trackedSellers = sqliteTable("tracked_sellers", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull(),
   feedbackScore: integer("feedback_score"),
-  positiveFeedbackPercent: numeric("positive_feedback_percent", { precision: 5, scale: 2 }),
+  positiveFeedbackPercent: text("positive_feedback_percent"),
   totalListings: integer("total_listings"),
-  topCategories: jsonb("top_categories"),
-  avgPrice: numeric("avg_price", { precision: 10, scale: 2 }),
-  snapshotData: jsonb("snapshot_data"),
-  lastCheckedAt: timestamp("last_checked_at"),
-  createdAt: timestamp("created_at").defaultNow(),
+  topCategories: text("top_categories", { mode: "json" }).$type<string[] | null>(),
+  avgPrice: text("avg_price"),
+  snapshotData: text("snapshot_data", { mode: "json" }),
+  lastCheckedAt: integer("last_checked_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
 export const insertTrackedSellerSchema = createInsertSchema(trackedSellers).omit({
@@ -112,12 +111,12 @@ export type TrackedSeller = typeof trackedSellers.$inferSelect;
 export type InsertTrackedSeller = z.infer<typeof insertTrackedSellerSchema>;
 
 // ─── Keyword Searches ────────────────────────────────────────────────────────
-export const keywordSearches = pgTable("keyword_searches", {
-  id: serial("id").primaryKey(),
+export const keywordSearches = sqliteTable("keyword_searches", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   query: text("query").notNull(),
   marketplace: text("marketplace").notNull().default("EBAY-US"),
-  results: jsonb("results"),
-  createdAt: timestamp("created_at").defaultNow(),
+  results: text("results", { mode: "json" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
 export const insertKeywordSearchSchema = createInsertSchema(keywordSearches).omit({
@@ -131,12 +130,12 @@ export type KeywordSearch = typeof keywordSearches.$inferSelect;
 export type InsertKeywordSearch = z.infer<typeof insertKeywordSearchSchema>;
 
 // ─── Supplier Searches ────────────────────────────────────────────────────────
-export const supplierSearches = pgTable("supplier_searches", {
-  id: serial("id").primaryKey(),
+export const supplierSearches = sqliteTable("supplier_searches", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   query: text("query").notNull(),
-  results: jsonb("results"),
+  results: text("results", { mode: "json" }),
   resultCount: integer("result_count").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
 export const insertSupplierSearchSchema = createInsertSchema(supplierSearches).omit({
@@ -150,12 +149,12 @@ export type SupplierSearch = typeof supplierSearches.$inferSelect;
 export type InsertSupplierSearch = z.infer<typeof insertSupplierSearchSchema>;
 
 // ─── Profit Scenarios ─────────────────────────────────────────────────────────
-export const profitScenarios = pgTable("profit_scenarios", {
-  id: serial("id").primaryKey(),
+export const profitScenarios = sqliteTable("profit_scenarios", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().default("Untitled Scenario"),
-  inputs: jsonb("inputs").notNull(),
-  outputs: jsonb("outputs").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  inputs: text("inputs", { mode: "json" }).notNull(),
+  outputs: text("outputs", { mode: "json" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
 export const insertProfitScenarioSchema = createInsertSchema(profitScenarios).omit({
@@ -170,15 +169,15 @@ export type ProfitScenario = typeof profitScenarios.$inferSelect;
 export type InsertProfitScenario = z.infer<typeof insertProfitScenarioSchema>;
 
 // ─── Templates ────────────────────────────────────────────────────────────────
-export const templates = pgTable("templates", {
-  id: serial("id").primaryKey(),
+export const templates = sqliteTable("templates", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   description: text("description"),
-  blocks: jsonb("blocks").notNull(),
-  isDefault: boolean("is_default").default(false),
-  versions: jsonb("versions"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  blocks: text("blocks", { mode: "json" }).notNull(),
+  isDefault: integer("is_default", { mode: "boolean" }).default(false),
+  versions: text("versions", { mode: "json" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
 export const insertTemplateSchema = createInsertSchema(templates).omit({
@@ -195,17 +194,17 @@ export type Template = typeof templates.$inferSelect;
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 
 // ─── Admin Settings ──────────────────────────────────────────────────────────
-export const adminSettings = pgTable("admin_settings", {
-  id: serial("id").primaryKey(),
+export const adminSettings = sqliteTable("admin_settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   siteName: text("site_name").notNull().default("AIBAY"),
   supportEmail: text("support_email").notNull().default("support@aibay.app"),
-  registrationEnabled: boolean("registration_enabled").notNull().default(true),
-  maintenanceMode: boolean("maintenance_mode").notNull().default(false),
+  registrationEnabled: integer("registration_enabled", { mode: "boolean" }).notNull().default(true),
+  maintenanceMode: integer("maintenance_mode", { mode: "boolean" }).notNull().default(false),
   defaultTrialDays: integer("default_trial_days").notNull().default(14),
-  trialPriceUsd: numeric("trial_price_usd", { precision: 10, scale: 2 }).notNull().default("1.00"),
-  enableWisePayments: boolean("enable_wise_payments").notNull().default(false),
-  featureFlags: jsonb("feature_flags"),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  trialPriceUsd: text("trial_price_usd").notNull().default("1.00"),
+  enableWisePayments: integer("enable_wise_payments", { mode: "boolean" }).notNull().default(false),
+  featureFlags: text("feature_flags", { mode: "json" }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
 export const insertAdminSettingsSchema = createInsertSchema(adminSettings).omit({
@@ -219,17 +218,17 @@ export type AdminSettings = typeof adminSettings.$inferSelect;
 export type InsertAdminSettings = z.infer<typeof insertAdminSettingsSchema>;
 
 // ─── Subscription Plans ──────────────────────────────────────────────────────
-export const subscriptionPlans = pgTable("subscription_plans", {
-  id: serial("id").primaryKey(),
+export const subscriptionPlans = sqliteTable("subscription_plans", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
-  priceUsd: numeric("price_usd", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  priceUsd: text("price_usd").notNull().default("0.00"),
   billingInterval: text("billing_interval").notNull().default("monthly"),
   trialDays: integer("trial_days").notNull().default(14),
-  isActive: boolean("is_active").notNull().default(true),
-  features: jsonb("features"),
-  updatedAt: timestamp("updated_at").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  features: text("features", { mode: "json" }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 
 export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({

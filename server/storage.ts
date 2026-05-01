@@ -337,7 +337,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-    return await db.select().from(subscriptionPlans).orderBy(subscriptionPlans.priceUsd, subscriptionPlans.createdAt);
+    return await db
+      .select()
+      .from(subscriptionPlans)
+      .orderBy(sql`CAST(${subscriptionPlans.priceUsd} AS REAL)`, subscriptionPlans.createdAt);
   }
 
   async updateSubscriptionPlan(id: number, data: Partial<InsertSubscriptionPlan>): Promise<SubscriptionPlan> {

@@ -7,8 +7,8 @@ AIBAY is a premium eBay market intelligence and listing generation platform desi
 
 ### Stack
 - **Frontend**: React + Vite, TanStack Query v5, wouter routing, shadcn/ui, Tailwind CSS, framer-motion
-- **Backend**: Express.js + TypeScript
-- **Database**: PostgreSQL + Drizzle ORM
+- **Backend**: Cloudflare Worker API (Express-compatible runtime) + TypeScript
+- **Database**: Cloudflare D1 + Drizzle ORM
 - **AI**: Pollinations.AI (100% free, zero API key, zero registration) — GPT-4o, Claude Opus 4.7, DeepSeek V4 Flash/Pro, Gemini, Llama, Mistral via `https://gen.pollinations.ai/v1`
 - **eBay Data**: eBay Finding API (via `EBAY_APP_ID` secret)
 
@@ -97,10 +97,12 @@ AIBAY is a premium eBay market intelligence and listing generation platform desi
 - `GET /api/templates/:id/history` — Template version history
 
 ## Environment Variables
-- `DATABASE_URL` — PostgreSQL connection (auto-configured by Replit)
+- `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account ID for D1 migrations
+- `CLOUDFLARE_D1_DATABASE_ID` — Cloudflare D1 database ID
+- `CLOUDFLARE_API_TOKEN` — Cloudflare API token for Wrangler/Drizzle D1 access
 - `EBAY_APP_ID` — eBay Developer App ID (required for live eBay data)
 - `OPENROUTER_API_KEY` — OpenRouter API key for AI features (also powers AI Arena free models)
-- `SESSION_SECRET` — Express session secret
+- `ADMIN_PASSWORD` — Admin dashboard password
 - `REPLICATE_API_TOKEN` — Replicate API for image upscaling/generation
 
 ## AI Model Arena (LMArena-style)

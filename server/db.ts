@@ -1,14 +1,22 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@shared/schema";
 
-const { Pool } = pg;
+export let db: any;
+let rawD1Database: D1Database | null = null;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+export function initializeD1Database(binding: D1Database) {
+  rawD1Database = binding;
+  db = drizzle(binding, { schema });
+  return db;
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool, { schema });
+export function getRawD1Database(): D1Database {
+  if (!rawD1Database) {
+    throw new Error("Cloudflare D1 database binding is not initialized");
+  }
+  return rawD1Database;
+}
+
+export function hasDatabase() {
+  return !!db;
+}
