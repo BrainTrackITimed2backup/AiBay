@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -501,10 +501,18 @@ function BestDealBanner({
 
 export default function SupplierFinderPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const [inputValue, setInputValue] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [ebayPriceInput, setEbayPriceInput] = useState("");
   const { toast } = useToast();
+
+  useEffect(() => {
+    const keyword = new URLSearchParams(search).get("q")?.trim() || "";
+    if (!keyword || keyword === searchKeyword) return;
+    setInputValue(keyword);
+    setSearchKeyword(keyword);
+  }, [search, searchKeyword]);
 
   const {
     data,

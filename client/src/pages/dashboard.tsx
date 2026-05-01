@@ -264,15 +264,15 @@ export default function Dashboard() {
               <div className="flex items-center gap-2 mb-2">
                 <Badge className="bg-white/15 text-white border-white/20 hover:bg-white/20 text-xs">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 inline-block animate-pulse" />
-                  Live eBay Intelligence
+                  eBay Research Workspace
                 </Badge>
-                <Badge className="bg-white/10 text-white border-white/15 text-xs">Beats ZikAnalytics</Badge>
+                <Badge className="bg-white/10 text-white border-white/15 text-xs">Work in progress</Badge>
               </div>
               <h1 className="text-3xl md:text-4xl font-display font-black tracking-tight leading-tight">
                 Welcome to <span className="text-blue-200">AI</span>BAY
               </h1>
               <p className="text-blue-100/90 max-w-lg text-sm mt-1.5 leading-relaxed">
-                The most powerful eBay intelligence platform. Research → Source → Generate → Profit — all in one place.
+                Research, source, generate, and validate listings from one workspace.
               </p>
             </div>
             <div className="flex flex-col gap-2 flex-shrink-0">
@@ -401,12 +401,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Hot Product Categories (always visible to guests) ─────────── */}
+        {/* ── Hot Product Categories (editorial starter list) ───────────── */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-display font-bold text-base flex items-center gap-2">
               <span className="text-lg">🔥</span> Hot Categories Right Now
-              <Badge variant="secondary" className="text-xs">Click to search suppliers</Badge>
+              <Badge variant="secondary" className="text-xs">Editorial starter list</Badge>
             </h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">

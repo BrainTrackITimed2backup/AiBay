@@ -294,6 +294,28 @@ export default function GeneratePage() {
 
   const prefillTitle = new URLSearchParams(searchStr).get("prefillTitle") || "";
   const prefillUrl = new URLSearchParams(searchStr).get("url") || "";
+  const initialMode = new URLSearchParams(searchStr).get("mode");
+
+  useEffect(() => {
+    if (prefillUrl && prefillUrl !== url) {
+      setUrl(prefillUrl);
+    }
+  }, [prefillUrl, url]);
+
+  useEffect(() => {
+    if (initialMode === "manual") {
+      setActiveTab("generate");
+      setInputMode("manual");
+      setBulkMode(false);
+      return;
+    }
+
+    if (initialMode === "bulk") {
+      setActiveTab("generate");
+      setInputMode("bulk");
+      setBulkMode(true);
+    }
+  }, [initialMode]);
 
   const platform = detectPlatformInfo(url.trim());
 

@@ -15,6 +15,21 @@ export default function HistoryPage() {
     l.generatedTitle.toLowerCase().includes(search.toLowerCase())
   );
 
+  function formatCreatedAt(value: string | Date | null | undefined) {
+    if (!value) return "Unknown date";
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleDateString();
+  }
+
+  function formatHostname(value: string | null | undefined) {
+    if (!value) return "Unknown source";
+    try {
+      return new URL(value).hostname;
+    } catch {
+      return "Unknown source";
+    }
+  }
+
   return (
     <Layout>
       <div className="space-y-8 max-w-5xl mx-auto">
@@ -67,10 +82,10 @@ export default function HistoryPage() {
                       <div className="flex items-center gap-4 mt-1.5 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" />
-                          {new Date(listing.createdAt!).toLocaleDateString()}
+                          {formatCreatedAt(listing.createdAt)}
                         </span>
                         <span className="truncate max-w-[200px] text-xs opacity-70">
-                          {new URL(listing.productUrl).hostname}
+                          {formatHostname(listing.productUrl)}
                         </span>
                       </div>
                     </div>

@@ -48,7 +48,7 @@ const TOOLS_NAV = [
   { href: "/roas-calculator", label: "ROAS Calculator", icon: Percent },
   { href: "/supplier", label: "Supplier Intelligence", icon: ShoppingBag },
   { href: "/supplier-finder", label: "Supplier Finder", icon: Globe },
-  { href: "/calculator", label: "Profit Calculator", icon: Calculator },
+  { href: "/profit-calculator", label: "Profit Calculator", icon: Calculator },
   { href: "/templates", label: "Templates", icon: Layers },
   { href: "/keywords", label: "Keyword Tool", icon: Search },
 ];

@@ -27,7 +27,7 @@ interface TrendProduct {
   emoji: string;
 }
 
-// Curated trending products by category — powered by real market intelligence
+// Curated trend examples until live social ingestion is implemented.
 const TRENDING_BY_CATEGORY: Record<string, TrendProduct[]> = {
   all: [],
   tech: [
@@ -113,12 +113,12 @@ export default function AdSpyPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Social Trend Spy</h1>
-              <p className="text-muted-foreground text-sm">Discover viral products from TikTok, Instagram, YouTube & Facebook — before competitors find them</p>
+              <p className="text-muted-foreground text-sm">Curated trend board for product ideas from TikTok, Instagram, YouTube, and Facebook</p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
             <Globe className="w-3.5 h-3.5" />
-            <span>Trend data aggregated from TikTok Shop, Instagram Shopping, YouTube Hauls, and Facebook Marketplace · Updated weekly</span>
+            <span>Currently curated sample trends for frontend preview. Live social ingestion is not wired yet.</span>
           </div>
         </div>
 

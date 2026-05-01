@@ -1,7 +1,7 @@
 {
   "name": "AIBAY — eBay Market Intelligence",
   "short_name": "AIBAY",
-  "description": "AI-powered eBay listing generator, live market research, supplier finder, profit calculator. Beats ZikAnalytics, AutoDS & SuperDS.",
+  "description": "AI-powered eBay listing generator, market research, supplier finder, and profit calculator.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0f1e",
