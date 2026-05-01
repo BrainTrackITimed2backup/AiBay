@@ -24,6 +24,20 @@ interface Stats {
   ebayConfigured: boolean;
 }
 
+interface QuickAnalysis {
+  sellThroughRate: number;
+  avgSoldPrice: number;
+  uniqueSellers: number;
+  opportunityScore: number;
+  isDemo?: boolean;
+}
+
+interface TrendingFeed {
+  items: any[];
+  source?: "live" | "demo";
+  message?: string;
+}
+
 const QUICK_TOOLS = [
   { href: "/market-research", label: "Market Research", icon: BarChart3, color: "from-blue-500 to-blue-600", desc: "Live STR, demand & opportunity scores" },
   { href: "/turbo-scanner", label: "Turbo Scanner", icon: ScanLine, color: "from-violet-500 to-violet-600", desc: "Scan 100+ products by category" },
@@ -111,7 +125,7 @@ function QuickAnalyzer() {
 
   const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
 
-  const { data, isLoading, error } = useQuery<any>({
+  const { data, isLoading, error } = useQuery<QuickAnalysis>({
     queryKey: ["/api/ebay/search", query],
     queryFn: async () => {
       const res = await fetch(buildApiUrl(`/api/ebay/search?keyword=${encodeURIComponent(query!)}`));
@@ -137,6 +151,9 @@ function QuickAnalyzer() {
         <span className="font-semibold text-sm">Quick Analyzer</span>
         {!ebayStatus?.configured && (
           <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-400">Setup required</Badge>
+        )}
+        {data?.isDemo && (
+          <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-400">Sample data</Badge>
         )}
       </div>
       <form onSubmit={handleSubmit} className="flex gap-2">
@@ -173,6 +190,11 @@ function QuickAnalyzer() {
                 </div>
               ))}
             </div>
+            {data.isDemo && (
+              <div className="rounded-lg border border-amber-400/40 bg-amber-400/8 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                Sample market data is showing because live eBay data is unavailable in the current environment.
+              </div>
+            )}
             <div className="flex gap-2 flex-wrap">
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => setLocation(`/market-research?keyword=${encodeURIComponent(query!)}`)}>
                 Full Analysis <ArrowRight className="w-3 h-3" />
@@ -209,7 +231,7 @@ export default function Dashboard() {
     queryKey: ["/api/listings"],
   });
 
-  const { data: hotData } = useQuery<{ items: any[] }>({
+  const { data: hotData } = useQuery<TrendingFeed>({
     queryKey: ["/api/ebay/trending", "all", "EBAY-US"],
     queryFn: async () => {
       const res = await fetch(buildApiUrl("/api/ebay/trending?marketplace=EBAY-US"));
@@ -438,18 +460,24 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* ── Hot Right Now (eBay live items when API key configured) ──── */}
+        {/* ── Hot Right Now ─────────────────────────────────────────────── */}
         {hotItems.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display font-bold text-base flex items-center gap-2">
-                <span className="text-lg">⚡</span> Live eBay Hot Items
+                <span className="text-lg">⚡</span> {hotData?.source === "demo" ? "Sample eBay Hot Items" : "Live eBay Hot Items"}
                 <Badge variant="secondary" className="text-xs">{hotItems.length} items</Badge>
+                {hotData?.source === "demo" ? <Badge variant="outline" className="text-xs">Demo</Badge> : null}
               </h2>
               <Button variant="ghost" size="sm" onClick={() => setLocation("/trending")} data-testid="btn-see-all-trending">
                 See all <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </div>
+            {hotData?.source === "demo" && hotData.message ? (
+              <div className="mb-3 rounded-lg border border-amber-400/40 bg-amber-400/8 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                {hotData.message}
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {hotItems.map((item: any, idx: number) => (
                 <motion.div
@@ -460,7 +488,7 @@ export default function Dashboard() {
                 >
                   <Card
                     className="overflow-hidden border-border/60 hover:shadow-md transition-all group cursor-pointer"
-                    onClick={() => window.open(item.viewItemUrl, "_blank")}
+                    onClick={() => window.open(item.viewItemUrl || item.viewItemURL, "_blank")}
                     data-testid={`hot-item-${item.itemId}`}
                   >
                     <div className="aspect-square bg-secondary relative overflow-hidden">

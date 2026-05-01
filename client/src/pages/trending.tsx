@@ -28,6 +28,13 @@ interface TrendingItem {
   trendDirection?: "up" | "down" | "flat" | "neutral";
   trendScore?: number;
   categoryName?: string;
+  isDemo?: boolean;
+}
+
+interface TrendingResponse {
+  items: TrendingItem[];
+  source?: "live" | "demo";
+  message?: string;
 }
 
 const CATEGORIES = [
@@ -103,7 +110,7 @@ export default function TrendingPage() {
 
   const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
 
-  const { data, isLoading, error, refetch } = useQuery<{ items: TrendingItem[] }>({
+  const { data, isLoading, error, refetch } = useQuery<TrendingResponse>({
     queryKey: ["/api/ebay/trending", categoryId, marketplace, sortMode, timeRange],
     queryFn: async () => {
       const p = new URLSearchParams({ marketplace, sortMode, timeRange });
@@ -161,7 +168,9 @@ export default function TrendingPage() {
               <TrendingUp className="w-6 h-6 text-primary" /> Trending Items
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              eBay's hottest products ranked by demand — updated every 15 minutes
+              {data?.source === "demo"
+                ? "Sample trending feed shown while live eBay data is unavailable"
+                : "eBay's hottest products ranked by demand — updated every 15 minutes"}
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -240,6 +249,12 @@ export default function TrendingPage() {
           </div>
         </Card>
 
+        {data?.source === "demo" && data.message && !isLoading && (
+          <Card className="p-4 border-amber-400/40 bg-amber-400/8">
+            <p className="text-sm text-amber-700 dark:text-amber-300">{data.message}</p>
+          </Card>
+        )}
+
         {/* Summary bar */}
         {items.length > 0 && (
           <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
@@ -249,6 +264,12 @@ export default function TrendingPage() {
               <Flame className="w-3 h-3 text-orange-500" />
               {items.filter((i: TrendingItem) => i.trendDirection === "up").length} hot items
             </span>
+            {data?.source === "demo" ? (
+              <>
+                <span>·</span>
+                <Badge variant="outline" className="text-[10px]">Sample data</Badge>
+              </>
+            ) : null}
             {sortMode === "mostSold" && (
               <Badge variant="secondary" className="text-[10px]">📦 Completed Sales</Badge>
             )}
@@ -326,7 +347,7 @@ export default function TrendingPage() {
                       >
                         <Bookmark className="w-2.5 h-2.5" /> Save
                       </button>
-                      <a href={item.viewItemUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
+                      <a href={item.viewItemUrl || item.viewItemURL || "#"} target="_blank" rel="noopener noreferrer" className="flex-1">
                         <button className="w-full h-6 text-[10px] rounded border border-border hover:bg-secondary flex items-center justify-center gap-0.5 transition-colors">
                           <ExternalLink className="w-2.5 h-2.5" /> View
                         </button>

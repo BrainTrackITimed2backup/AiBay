@@ -18,7 +18,6 @@ import WatchlistPage from "@/pages/watchlist";
 import SupplierFinderPage from "@/pages/supplier-finder";
 import ProfitCalculatorPage from "@/pages/profit-calculator";
 import SupplierIntelligencePage from "@/pages/supplier-intelligence";
-import CalculatorPage from "@/pages/calculator";
 import TemplatesPage from "@/pages/templates";
 import VeroCheckerPage from "@/pages/vero-checker";
 import RoasCalculatorPage from "@/pages/roas-calculator";
@@ -54,7 +53,7 @@ function Router() {
       <Route path="/supplier-finder" component={SupplierFinderPage} />
       <Route path="/profit-calculator" component={ProfitCalculatorPage} />
       <Route path="/supplier" component={SupplierIntelligencePage} />
-      <Route path="/calculator" component={CalculatorPage} />
+      <Route path="/calculator" component={ProfitCalculatorPage} />
       <Route path="/templates" component={TemplatesPage} />
       <Route path="/vero-checker" component={VeroCheckerPage} />
       <Route path="/roas-calculator" component={RoasCalculatorPage} />
