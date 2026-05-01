@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, buildApiUrl } from "@/lib/queryClient";
 import {
   ChevronLeft, Download, ImageIcon, FileText, Code, Loader2, Sparkles,
   ListChecks, Package, ExternalLink, BarChart3, Check, Pencil, X, Plus,
@@ -1089,7 +1089,7 @@ export default function ListingDetails() {
             </p>
           </div>
           <Button variant="outline" size="sm" className="gap-1.5 shrink-0" asChild data-testid="btn-csv-export">
-            <a href={`/api/listings/${listing.id}/export-csv`} download>
+            <a href={buildApiUrl(`/api/listings/${listing.id}/export-csv`)} download>
               <Download className="w-3.5 h-3.5" /> Export CSV
             </a>
           </Button>
@@ -1216,7 +1216,7 @@ export default function ListingDetails() {
                     size="sm"
                     className="gap-1.5 text-xs"
                     data-testid="btn-download-images-zip"
-                    onClick={() => window.open(`/api/listings/${listing.id}/images-zip`, "_blank")}
+                    onClick={() => window.open(buildApiUrl(`/api/listings/${listing.id}/images-zip`), "_blank")}
                   >
                     <Archive className="w-3.5 h-3.5" /> Download All Images (ZIP)
                   </Button>

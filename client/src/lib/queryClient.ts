@@ -1,10 +1,24 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const CONFIGURED_API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const PAGES_FALLBACK_API_BASE = "https://aibay-3gql.onrender.com";
+
+function getRuntimeApiBase(): string {
+  if (CONFIGURED_API_BASE) return CONFIGURED_API_BASE;
+  if (typeof window === "undefined") return "";
+
+  const hostname = window.location.hostname.toLowerCase();
+  if (hostname.endsWith(".pages.dev") || hostname.endsWith(".workers.dev")) {
+    return PAGES_FALLBACK_API_BASE;
+  }
+
+  return "";
+}
 
 export function buildApiUrl(url: string): string {
   if (!url.startsWith("/api/")) return url;
-  return API_BASE ? `${API_BASE}${url}` : url;
+  const apiBase = getRuntimeApiBase();
+  return apiBase ? `${apiBase}${url}` : url;
 }
 
 async function throwIfResNotOk(res: Response) {

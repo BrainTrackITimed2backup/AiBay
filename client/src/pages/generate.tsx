@@ -240,7 +240,7 @@ function BulkProgress({ jobId, onDone, onRetry }: { jobId: number; onDone: (r: B
               size="sm"
               variant="outline"
               data-testid="button-export-bulk-csv"
-              onClick={() => window.open(`/api/optimize/bulk/${jobId}/export-csv`, "_blank")}
+              onClick={() => window.open(buildApiUrl(`/api/optimize/bulk/${jobId}/export-csv`), "_blank")}
               className="text-xs gap-1"
             >
               <FileText className="w-3 h-3" /> Export All to eBay CSV
