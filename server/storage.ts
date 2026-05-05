@@ -7,8 +7,6 @@ import {
   supplierSearches,
   profitScenarios,
   templates,
-  adminSettings,
-  subscriptionPlans,
   type InsertListing,
   type Listing,
   type BulkJob,
@@ -25,10 +23,6 @@ import {
   type InsertProfitScenario,
   type Template,
   type InsertTemplate,
-  type AdminSettings,
-  type InsertAdminSettings,
-  type SubscriptionPlan,
-  type InsertSubscriptionPlan,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, gte } from "drizzle-orm";
@@ -84,16 +78,6 @@ export interface IStorage {
   deleteTemplate(id: number): Promise<void>;
   setDefaultTemplate(id: number): Promise<Template>;
   getDefaultTemplate(): Promise<Template | undefined>;
-
-  // Admin Settings
-  getAdminSettings(): Promise<AdminSettings | undefined>;
-  upsertAdminSettings(data: Partial<InsertAdminSettings>): Promise<AdminSettings>;
-
-  // Subscription Plans
-  createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
-  getSubscriptionPlans(): Promise<SubscriptionPlan[]>;
-  updateSubscriptionPlan(id: number, data: Partial<InsertSubscriptionPlan>): Promise<SubscriptionPlan>;
-  deleteSubscriptionPlan(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -288,69 +272,6 @@ export class DatabaseStorage implements IStorage {
   async getDefaultTemplate(): Promise<Template | undefined> {
     const [tmpl] = await db.select().from(templates).where(eq(templates.isDefault, true));
     return tmpl;
-  }
-
-  // ─── Admin Settings ────────────────────────────────────────────────────────
-  async getAdminSettings(): Promise<AdminSettings | undefined> {
-    const [settings] = await db.select().from(adminSettings).limit(1);
-    return settings;
-  }
-
-  async upsertAdminSettings(data: Partial<InsertAdminSettings>): Promise<AdminSettings> {
-    const existing = await this.getAdminSettings();
-
-    if (existing) {
-      const [updated] = await db
-        .update(adminSettings)
-        .set({ ...data, updatedAt: new Date() })
-        .where(eq(adminSettings.id, existing.id))
-        .returning();
-      return updated;
-    }
-
-    const [created] = await db
-      .insert(adminSettings)
-      .values({
-        siteName: data.siteName ?? "AIBAY",
-        supportEmail: data.supportEmail ?? "support@aibay.app",
-        registrationEnabled: data.registrationEnabled ?? true,
-        maintenanceMode: data.maintenanceMode ?? false,
-        defaultTrialDays: data.defaultTrialDays ?? 14,
-        trialPriceUsd: data.trialPriceUsd ?? "1.00",
-        enableWisePayments: data.enableWisePayments ?? false,
-        featureFlags: data.featureFlags ?? {},
-      })
-      .returning();
-    return created;
-  }
-
-  // ─── Subscription Plans ────────────────────────────────────────────────────
-  async createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
-    const [created] = await db
-      .insert(subscriptionPlans)
-      .values({
-        ...plan,
-        features: plan.features ?? [],
-      })
-      .returning();
-    return created;
-  }
-
-  async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-    return await db.select().from(subscriptionPlans).orderBy(subscriptionPlans.priceUsd, subscriptionPlans.createdAt);
-  }
-
-  async updateSubscriptionPlan(id: number, data: Partial<InsertSubscriptionPlan>): Promise<SubscriptionPlan> {
-    const [updated] = await db
-      .update(subscriptionPlans)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(subscriptionPlans.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteSubscriptionPlan(id: number): Promise<void> {
-    await db.delete(subscriptionPlans).where(eq(subscriptionPlans.id, id));
   }
 }
 

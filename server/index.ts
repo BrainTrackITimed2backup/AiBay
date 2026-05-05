@@ -1,10 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import ConnectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { db } from "./db";
-import { sql } from "drizzle-orm";
 
 const app = express();
 const httpServer = createServer(app);
@@ -51,6 +51,27 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+// ─── Session Middleware ───────────────────────────────────────────────────────
+const PgSession = ConnectPgSimple(session);
+app.use(
+  session({
+    store: new PgSession({
+      conString: process.env.DATABASE_URL,
+      tableName: "user_sessions",
+      createTableIfMissing: true,
+    }),
+    secret: process.env.SESSION_SECRET || "aibay-super-secret-dev-key-change-in-prod",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    },
+  })
+);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -143,101 +164,9 @@ async function seedDefaultTemplates() {
   }
 }
 
-async function ensureAdminTables() {
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS admin_settings (
-      id serial PRIMARY KEY,
-      site_name text NOT NULL DEFAULT 'AIBAY',
-      support_email text NOT NULL DEFAULT 'support@aibay.app',
-      registration_enabled boolean NOT NULL DEFAULT true,
-      maintenance_mode boolean NOT NULL DEFAULT false,
-      default_trial_days integer NOT NULL DEFAULT 14,
-      trial_price_usd numeric(10,2) NOT NULL DEFAULT 1.00,
-      enable_wise_payments boolean NOT NULL DEFAULT false,
-      feature_flags jsonb,
-      updated_at timestamp DEFAULT now()
-    )
-  `);
-
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS subscription_plans (
-      id serial PRIMARY KEY,
-      name text NOT NULL,
-      slug text NOT NULL,
-      price_usd numeric(10,2) NOT NULL DEFAULT 0.00,
-      billing_interval text NOT NULL DEFAULT 'monthly',
-      trial_days integer NOT NULL DEFAULT 14,
-      is_active boolean NOT NULL DEFAULT true,
-      features jsonb,
-      updated_at timestamp DEFAULT now(),
-      created_at timestamp DEFAULT now()
-    )
-  `);
-}
-
-async function seedDefaultAdminData() {
-  try {
-    const existingSettings = await storage.getAdminSettings();
-    if (!existingSettings) {
-      await storage.upsertAdminSettings({
-        siteName: "AIBAY",
-        supportEmail: "support@aibay.app",
-        registrationEnabled: true,
-        maintenanceMode: false,
-        defaultTrialDays: 14,
-        trialPriceUsd: "1.00",
-        enableWisePayments: false,
-        featureFlags: {
-          aiArena: true,
-          supplierFinder: true,
-          adminAnalytics: true,
-          wisePayments: false,
-        },
-      });
-    }
-
-    const existingPlans = await storage.getSubscriptionPlans();
-    if (existingPlans.length > 0) return;
-
-    await storage.createSubscriptionPlan({
-      name: "Starter Trial",
-      slug: "starter-trial",
-      priceUsd: "1.00",
-      billingInterval: "monthly",
-      trialDays: 14,
-      isActive: true,
-      features: ["14-day trial", "Listing generator", "Market research", "Basic supplier finder"],
-    });
-
-    await storage.createSubscriptionPlan({
-      name: "Pro Monthly",
-      slug: "pro-monthly",
-      priceUsd: "29.00",
-      billingInterval: "monthly",
-      trialDays: 14,
-      isActive: true,
-      features: ["Unlimited listing generation", "Top sellers", "Templates", "Watchlist tracking", "Admin support"],
-    });
-
-    await storage.createSubscriptionPlan({
-      name: "Scale Annual",
-      slug: "scale-annual",
-      priceUsd: "249.00",
-      billingInterval: "annual",
-      trialDays: 14,
-      isActive: true,
-      features: ["Everything in Pro", "Annual discount", "Priority support", "Advanced competitor workflows"],
-    });
-  } catch (err) {
-    console.warn("[seed] Admin seed failed:", err);
-  }
-}
-
 (async () => {
-  await ensureAdminTables();
   await registerRoutes(httpServer, app);
   await seedDefaultTemplates();
-  await seedDefaultAdminData();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
