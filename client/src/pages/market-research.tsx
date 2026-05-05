@@ -13,11 +13,11 @@ import {
   BarChart3, Search, TrendingUp, ExternalLink, Bookmark, Download,
   Loader2, AlertCircle, ShoppingBag, Users, DollarSign, Target,
   Calculator, ChevronDown, ChevronUp, ArrowUpRight, ArrowDownRight,
-  Info, Zap, Package, Shield, Flame, Star
+  Info, Zap, Package, Shield, Flame, Star, Activity, Clock, ThumbsUp
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { apiRequest, buildApiUrl } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -36,6 +36,7 @@ interface ListingItem {
   sellerFeedback?: number;
   categoryName?: string;
 }
+
 interface MarketAnalysis {
   keyword: string;
   totalResults: number;
@@ -48,23 +49,26 @@ interface MarketAnalysis {
   demandScore: number;
   competitionScore?: number;
   opportunityScore?: number;
+  hotScore?: number;
+  profitPotential?: number;
+  velocityScore?: number;
   avgSoldPrice?: number;
   avgActivePrice?: number;
   uniqueSellers?: number;
   activeListings?: number;
-  priceHistory?: { date: string; avgPrice: number }[];
+  soldListings?: number;
+  recommendation?: string;
+  avgDaysToSell?: number;
   priceHistogram?: { range: string; count: number }[];
   topListings: ListingItem[];
   soldListingsData: ListingItem[];
   keywordSuggestions?: string[];
-  isDemo?: boolean;
 }
 
-// ─── Client-side VERO quick check (no API call needed) ────────────────────────
 const QUICK_VERO_BRANDS = [
   "nike","adidas","louis vuitton","lv","gucci","chanel","apple","iphone","ipad",
   "supreme","jordan","yeezy","rolex","beats","disney","pokemon","lego","ferrari",
-  "lamborghini","gucci","versace","prada","hermes","cartier","dior","samsung galaxy",
+  "lamborghini","versace","prada","hermes","cartier","dior","samsung galaxy",
   "airpods","macbook","nintendo","playstation","xbox","bape","off-white","balenciaga",
 ];
 
@@ -115,25 +119,20 @@ const TOP_CATEGORIES = [
   { id: "1249", name: "Video Games" },
 ];
 
+// ─── ZikAnalytics-style Score Ring ───────────────────────────────────────────
 function ScoreRing({ score, label, size = 80 }: { score: number; label: string; size?: number }) {
   const r = size / 2 - 8;
   const c = 2 * Math.PI * r;
   const pct = Math.min(Math.max(score, 0), 100);
   const color = pct >= 70 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#ef4444";
-
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth="6" className="text-border/60" />
-          <circle
-            cx={size / 2} cy={size / 2} r={r}
-            fill="none" stroke={color} strokeWidth="6"
-            strokeDasharray={c}
-            strokeDashoffset={c - (pct / 100) * c}
-            strokeLinecap="round"
-            style={{ transition: "stroke-dashoffset 0.8s ease" }}
-          />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="6"
+            strokeDasharray={c} strokeDashoffset={c - (pct / 100) * c}
+            strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.8s ease" }} />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="text-xl font-display font-black" style={{ color }}>{score}</span>
@@ -144,16 +143,32 @@ function ScoreRing({ score, label, size = 80 }: { score: number; label: string; 
   );
 }
 
+// ─── Hot Score Bar (ZikAnalytics-style) ──────────────────────────────────────
+function HotScoreBar({ score, label }: { score: number; label: string }) {
+  const color = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-bold">{score}/100</span>
+      </div>
+      <div className="h-2 bg-secondary rounded-full overflow-hidden">
+        <motion.div initial={{ width: 0 }} animate={{ width: `${score}%` }} transition={{ duration: 0.8, ease: "easeOut" }}
+          className={cn("h-full rounded-full", color)} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Price Histogram ──────────────────────────────────────────────────────────
 function PriceHistogram({ data }: { data: { range: string; count: number }[] }) {
   const max = Math.max(...data.map((d) => d.count), 1);
   return (
     <div className="flex items-end gap-1.5 h-20">
       {data.map((bucket, i) => (
         <div key={i} className="flex-1 flex flex-col items-center gap-1">
-          <div
-            className="w-full bg-primary/20 hover:bg-primary/50 rounded-sm transition-colors cursor-default group relative"
-            style={{ height: `${Math.max(Math.round((bucket.count / max) * 100), bucket.count > 0 ? 4 : 0)}%` }}
-          >
+          <div className="w-full bg-primary/20 hover:bg-primary/50 rounded-sm transition-colors cursor-default group relative"
+            style={{ height: `${Math.max(Math.round((bucket.count / max) * 100), bucket.count > 0 ? 4 : 0)}%` }}>
             <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-foreground text-background text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
               {bucket.count} items
             </div>
@@ -165,6 +180,7 @@ function PriceHistogram({ data }: { data: { range: string; count: number }[] }) 
   );
 }
 
+// ─── Profit Calculator ────────────────────────────────────────────────────────
 function ProfitCalculator({ avgSoldPrice }: { avgSoldPrice: number }) {
   const [open, setOpen] = useState(false);
   const [cost, setCost] = useState("");
@@ -175,21 +191,16 @@ function ProfitCalculator({ avgSoldPrice }: { avgSoldPrice: number }) {
   const shippingNum = parseFloat(shipping) || 0;
   const feeNum = parseFloat(ebayFee) || 13.25;
   const sellPrice = avgSoldPrice || 0;
-
   const ebayFeeAmt = sellPrice * (feeNum / 100);
   const netProfit = sellPrice - costNum - shippingNum - ebayFeeAmt;
   const margin = sellPrice > 0 ? (netProfit / sellPrice) * 100 : 0;
   const roi = costNum > 0 ? (netProfit / costNum) * 100 : 0;
-
   const profitable = netProfit > 0;
 
   return (
     <Card className="border-border/60 overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors"
-        data-testid="btn-profit-calculator"
-      >
+      <button onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
             <Calculator className="w-4 h-4 text-emerald-500" />
@@ -203,7 +214,6 @@ function ProfitCalculator({ avgSoldPrice }: { avgSoldPrice: number }) {
         </div>
         {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
       </button>
-
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
@@ -211,7 +221,7 @@ function ProfitCalculator({ avgSoldPrice }: { avgSoldPrice: number }) {
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Supplier Cost ($)</Label>
-                  <Input type="number" placeholder="0.00" value={cost} onChange={(e) => setCost(e.target.value)} className="h-8 text-sm" data-testid="input-supplier-cost" />
+                  <Input type="number" placeholder="0.00" value={cost} onChange={(e) => setCost(e.target.value)} className="h-8 text-sm" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Shipping ($)</Label>
@@ -222,7 +232,6 @@ function ProfitCalculator({ avgSoldPrice }: { avgSoldPrice: number }) {
                   <Input type="number" value={ebayFee} onChange={(e) => setEbayFee(e.target.value)} className="h-8 text-sm" />
                 </div>
               </div>
-
               {sellPrice > 0 && (
                 <div className="bg-secondary/40 rounded-xl p-4 space-y-2">
                   <div className="flex items-center justify-between text-sm">
@@ -271,7 +280,6 @@ const TIME_RANGES = [
   { id: "7d", label: "7 Days" },
   { id: "30d", label: "30 Days" },
   { id: "90d", label: "90 Days" },
-  { id: "1y", label: "1 Year" },
   { id: "all", label: "All Time" },
 ];
 
@@ -285,7 +293,6 @@ export default function MarketResearch() {
   const qc = useQueryClient();
   const searchStr = useSearch();
 
-  // Pre-fill from dashboard quick analyzer or category page deep-link
   useEffect(() => {
     const params = new URLSearchParams(searchStr);
     const kw = params.get("keyword");
@@ -295,7 +302,6 @@ export default function MarketResearch() {
       if (cat) setCategoryId(cat);
       setSearchQuery({ keyword: kw, marketplace: "EBAY-US", categoryId: cat, timeRange: "30d" });
     } else if (cat) {
-      // Category-only deep-link from Category Analytics page
       setCategoryId(cat);
       setSearchQuery({ keyword: "*", marketplace: "EBAY-US", categoryId: cat, timeRange: "30d" });
     }
@@ -310,12 +316,13 @@ export default function MarketResearch() {
       const params = new URLSearchParams({ keyword: searchQuery.keyword, marketplace: searchQuery.marketplace });
       if (searchQuery.categoryId) params.set("categoryId", searchQuery.categoryId);
       if (searchQuery.timeRange) params.set("timeRange", searchQuery.timeRange);
-      const res = await fetch(buildApiUrl(`/api/ebay/search?${params}`));
+      const res = await fetch(`/api/ebay/search?${params}`);
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "Failed"); }
       return res.json();
     },
     enabled: !!searchQuery,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
+    refetchInterval: 3 * 60 * 1000,
   });
 
   function handleSearch(e: React.FormEvent) {
@@ -333,7 +340,7 @@ export default function MarketResearch() {
       i.sellerUsername, i.sellerFeedback, i.watchCount,
       i.categoryName, i.viewItemUrl,
     ]);
-    const csv = [headers.join(","), ...rows.map((r: (string | number | undefined)[]) => r.join(","))].join("\n");
+    const csv = [headers.join(","), ...rows.map((r: any[]) => r.join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -358,72 +365,54 @@ export default function MarketResearch() {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-primary" /> Market Research
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Live eBay sell-through rates, competition analysis, and profit potential
+            Live eBay data — sell-through rates, hot score, profit potential &amp; competition analysis
           </p>
         </div>
 
         {ebayStatus && !ebayStatus.configured && <EbaySetupBanner />}
 
-        {/* Search */}
+        {/* Search Bar */}
         <Card className="p-4 border-border/60">
           <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder='Enter keyword e.g. "AirPods Pro", "vintage Rolex"'
-                className="pl-9 h-10"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                data-testid="input-keyword"
-              />
+              <Input placeholder='Enter keyword e.g. "AirPods Pro", "vintage Rolex"'
+                className="pl-9 h-10" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
             </div>
             <Select value={marketplace} onValueChange={setMarketplace}>
-              <SelectTrigger className="w-full sm:w-28 h-10" data-testid="select-marketplace">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="w-full sm:w-28 h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {MARKETPLACES.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger className="w-full sm:w-44 h-10" data-testid="select-category">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
+              <SelectTrigger className="w-full sm:w-44 h-10"><SelectValue placeholder="All Categories" /></SelectTrigger>
               <SelectContent>
                 {TOP_CATEGORIES.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button type="submit" className="h-10 px-6" disabled={isLoading || !keyword.trim()} data-testid="btn-search">
+            <Button type="submit" className="h-10 px-6" disabled={isLoading || !keyword.trim()}>
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
               Analyze
             </Button>
           </form>
-          {/* Time-range filter */}
           <div className="flex items-center gap-2 mt-3">
-            <span className="text-xs text-muted-foreground">Time range:</span>
+            <span className="text-xs text-muted-foreground">Sold items time range:</span>
             <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-1">
               {TIME_RANGES.map(tr => (
-                <button
-                  key={tr.id}
-                  type="button"
-                  className={cn(
-                    "text-xs px-2.5 py-1 rounded-md font-medium transition-all",
-                    timeRange === tr.id ? "bg-white dark:bg-secondary shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-                  )}
-                  onClick={() => setTimeRange(tr.id)}
-                  data-testid={`chip-timerange-${tr.id}`}
-                >
+                <button key={tr.id} type="button"
+                  className={cn("text-xs px-2.5 py-1 rounded-md font-medium transition-all",
+                    timeRange === tr.id ? "bg-white dark:bg-secondary shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+                  onClick={() => setTimeRange(tr.id)}>
                   {tr.label}
                 </button>
               ))}
             </div>
-            <span className="text-xs text-muted-foreground hidden sm:block">— filters displayed sold listing history</span>
           </div>
         </Card>
 
@@ -433,6 +422,7 @@ export default function MarketResearch() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[1,2,3,4].map(i => <div key={i} className="h-24 bg-secondary/30 rounded-xl animate-pulse" />)}
             </div>
+            <div className="h-48 bg-secondary/30 rounded-xl animate-pulse" />
           </div>
         )}
 
@@ -453,37 +443,61 @@ export default function MarketResearch() {
         {analysis && !isLoading && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
 
-            {/* Demo data notice */}
-            {analysis.isDemo && (
-              <div className="flex items-center gap-2.5 rounded-lg border border-amber-400/40 bg-amber-400/8 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-300">
-                <Info className="w-4 h-4 shrink-0" />
-                <span>
-                  <strong>Sample data</strong> — eBay is unreachable from the development environment.
-                  All features work normally. Real live data loads automatically once deployed to Cloudflare + Render.
-                </span>
+
+            {/* ZikAnalytics-style Recommendation Banner */}
+            {analysis.recommendation && (
+              <div className={cn("rounded-xl p-4 text-sm font-semibold border",
+                analysis.recommendation.startsWith("🔥") ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                : analysis.recommendation.startsWith("✅") ? "bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300"
+                : analysis.recommendation.startsWith("⚠️") ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                : "bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300"
+              )}>
+                {analysis.recommendation}
               </div>
             )}
 
-            {/* Scores + Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Opportunity Scores */}
+            {/* Top Stats Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+              {[
+                { label: "Sell-Through Rate", value: `${analysis.sellThroughRate}%`, color: analysis.sellThroughRate >= 50 ? "text-emerald-500" : analysis.sellThroughRate >= 30 ? "text-amber-500" : "text-red-500", icon: Activity },
+                { label: "Avg Sold Price", value: `$${(analysis.avgSoldPrice ?? 0).toFixed(2)}`, color: "text-foreground", icon: DollarSign },
+                { label: "Active Listings", value: (analysis.activeListings ?? 0).toLocaleString(), color: "text-foreground", icon: Package },
+                { label: "Total Sold", value: (analysis.soldListings ?? 0).toLocaleString(), color: "text-emerald-500", icon: ThumbsUp },
+                { label: "Unique Sellers", value: analysis.uniqueSellers ?? 0, color: "text-foreground", icon: Users },
+                { label: "Avg Days to Sell", value: analysis.avgDaysToSell ? `~${analysis.avgDaysToSell}d` : "N/A", color: "text-muted-foreground", icon: Clock },
+              ].map((s) => (
+                <Card key={s.label} className="p-3 border-border/60">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <s.icon className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">{s.label}</span>
+                  </div>
+                  <p className={cn("text-xl font-display font-black", s.color)}>{s.value}</p>
+                </Card>
+              ))}
+            </div>
+
+            {/* ZikAnalytics-style Score Panel + Pricing */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Score Rings */}
               <Card className="p-5 border-border/60">
-                <p className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-wide">Opportunity Assessment</p>
-                <div className="flex items-center justify-around">
+                <p className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-wide">Opportunity Scores</p>
+                <div className="flex items-center justify-around mb-4">
                   <ScoreRing score={analysis.demandScore} label="Demand" />
                   <ScoreRing score={analysis.sellThroughRate} label="STR %" />
-                  <ScoreRing score={analysis.competitionScore ?? 0} label="Competition" />
                   <ScoreRing score={analysis.opportunityScore ?? 0} label="Opportunity" />
                 </div>
-                <div className={cn(
-                  "mt-4 rounded-xl p-3 text-center text-sm font-semibold",
-                  (analysis.opportunityScore ?? 0) >= 70 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : (analysis.opportunityScore ?? 0) >= 40 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                  : "bg-red-500/10 text-red-600 dark:text-red-400"
-                )}>
-                  {(analysis.opportunityScore ?? 0) >= 70 ? "🟢 Excellent opportunity — low competition, high demand"
-                  : (analysis.opportunityScore ?? 0) >= 40 ? "🟡 Moderate opportunity — competitive but viable"
-                  : "🔴 Highly competitive market — consider niche variations"}
+              </Card>
+
+              {/* Hot Score Bars (ZikAnalytics-style) */}
+              <Card className="p-5 border-border/60">
+                <p className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-wide flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-orange-500" /> Market Heat Scores
+                </p>
+                <div className="space-y-3">
+                  <HotScoreBar score={analysis.hotScore ?? 0} label="Hot Score" />
+                  <HotScoreBar score={analysis.profitPotential ?? 0} label="Profit Potential" />
+                  <HotScoreBar score={analysis.velocityScore ?? 0} label="Sales Velocity" />
+                  <HotScoreBar score={100 - (analysis.competitionScore ?? 50)} label="Low Competition" />
                 </div>
               </Card>
 
@@ -509,12 +523,9 @@ export default function MarketResearch() {
                         <div className="w-2.5 h-2.5 rounded-full bg-violet-500" /> Price Gap
                       </span>
                       <span className={cn("font-bold flex items-center gap-1",
-                        (analysis.avgSoldPrice ?? 0) > (analysis.avgActivePrice ?? 0) ? "text-emerald-500" : "text-muted-foreground"
-                      )}>
+                        (analysis.avgSoldPrice ?? 0) > (analysis.avgActivePrice ?? 0) ? "text-emerald-500" : "text-muted-foreground")}>
                         {(analysis.avgSoldPrice ?? 0) > (analysis.avgActivePrice ?? 0)
-                          ? <ArrowUpRight className="w-3 h-3" />
-                          : <ArrowDownRight className="w-3 h-3" />
-                        }
+                          ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                         ${Math.abs((analysis.avgSoldPrice ?? 0) - (analysis.avgActivePrice ?? 0)).toFixed(2)}
                       </span>
                     </div>
@@ -523,22 +534,14 @@ export default function MarketResearch() {
                     <span className="text-sm text-muted-foreground">Price Range</span>
                     <span className="font-medium text-sm">${analysis.minPrice.toFixed(0)} – ${analysis.maxPrice.toFixed(0)}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Unique Sellers</span>
-                    <span className="font-medium text-sm">{analysis.uniqueSellers}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Active Listings</span>
-                    <span className="font-medium text-sm">{analysis.activeListings?.toLocaleString()}</span>
-                  </div>
+                  {/* Price Histogram */}
+                  {(analysis.priceHistogram?.length ?? 0) > 0 && (
+                    <div className="pt-2 border-t border-border/60">
+                      <p className="text-xs text-muted-foreground mb-2 font-medium">Price Distribution</p>
+                      <PriceHistogram data={analysis.priceHistogram!} />
+                    </div>
+                  )}
                 </div>
-                {/* Price Histogram */}
-                {(analysis.priceHistogram?.length ?? 0) > 0 && (
-                  <div className="mt-4 pt-4 border-t border-border/60">
-                    <p className="text-xs text-muted-foreground mb-2 font-medium">Price Distribution</p>
-                    <PriceHistogram data={analysis.priceHistogram!} />
-                  </div>
-                )}
               </Card>
             </div>
 
@@ -552,60 +555,56 @@ export default function MarketResearch() {
                   Top Active Listings
                   <Badge variant="secondary" className="ml-2 text-xs font-normal">{analysis.topListings?.length} shown</Badge>
                 </h3>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={exportCSV} data-testid="btn-export-csv" className="h-8 text-xs">
-                    <Download className="w-3.5 h-3.5 mr-1.5" /> CSV
-                  </Button>
-                </div>
+                <Button variant="outline" size="sm" onClick={exportCSV} className="h-8 text-xs">
+                  <Download className="w-3.5 h-3.5 mr-1.5" /> CSV
+                </Button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                 {analysis.topListings?.map((item: ListingItem) => {
                   const vero = quickVeroCheck(item.title);
                   const winScore = computeWinScore(item, analysis);
                   return (
-                  <Card key={item.itemId} className="overflow-hidden border-border/60 hover:shadow-md transition-all group">
-                    <div className="aspect-square bg-secondary relative overflow-hidden">
-                      {item.galleryUrl ? (
-                        <img src={item.galleryUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Package className="w-6 h-6 text-muted-foreground/30" />
+                    <Card key={item.itemId} className="overflow-hidden border-border/60 hover:shadow-md transition-all group">
+                      <div className="aspect-square bg-secondary relative overflow-hidden">
+                        {item.galleryUrl ? (
+                          <img src={item.galleryUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="w-6 h-6 text-muted-foreground/30" />
+                          </div>
+                        )}
+                        {(item.watchCount ?? 0) > 0 && (
+                          <div className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                            👁 {item.watchCount}
+                          </div>
+                        )}
+                        <div className={`absolute top-1 left-1 text-white text-[9px] px-1.5 py-0.5 rounded-md font-bold ${winScore >= 75 ? "bg-green-500" : winScore >= 55 ? "bg-blue-500" : "bg-gray-500"}`}>
+                          ⭐ {winScore}
                         </div>
-                      )}
-                      {(item.watchCount ?? 0) > 0 && (
-                        <div className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                          👁 {item.watchCount}
-                        </div>
-                      )}
-                      {/* WIN SCORE badge */}
-                      <div className={`absolute top-1 left-1 text-white text-[9px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5 ${winScore >= 75 ? "bg-green-500" : winScore >= 55 ? "bg-blue-500" : "bg-gray-500"}`}>
-                        ⭐ {winScore}
+                        {vero.risky && (
+                          <div className="absolute top-1 right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-bold" title={`VERO Risk: ${vero.brand}`}>
+                            🛡️ VERO
+                          </div>
+                        )}
                       </div>
-                      {/* VERO warning */}
-                      {vero.risky && (
-                        <div className="absolute top-1 right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5" title={`VERO Risk: ${vero.brand}`}>
-                          🛡️ VERO
+                      <div className="p-2.5">
+                        <p className="text-xs font-medium line-clamp-2 leading-snug mb-1.5">{item.title}</p>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-sm font-bold text-primary">${item.price.toFixed(2)}</span>
+                          <span className="text-[10px] text-muted-foreground">{item.condition}</span>
                         </div>
-                      )}
-                    </div>
-                    <div className="p-2.5">
-                      <p className="text-xs font-medium line-clamp-2 leading-snug mb-1.5">{item.title}</p>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm font-bold text-primary">${item.price.toFixed(2)}</span>
-                        <span className="text-[10px] text-muted-foreground">{item.condition}</span>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="outline" className="h-6 text-[10px] flex-1 px-1" onClick={() => addToWatchlist(item)} data-testid={`btn-watchlist-${item.itemId}`}>
-                          <Bookmark className="w-2.5 h-2.5 mr-0.5" /> Save
-                        </Button>
-                        <a href={item.viewItemUrl} target="_blank" rel="noopener noreferrer" className="flex-none">
-                          <Button size="sm" variant="ghost" className="h-6 w-7 p-0">
-                            <ExternalLink className="w-3 h-3" />
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="outline" className="h-6 text-[10px] flex-1 px-1" onClick={() => addToWatchlist(item)}>
+                            <Bookmark className="w-2.5 h-2.5 mr-0.5" /> Save
                           </Button>
-                        </a>
+                          <a href={item.viewItemUrl} target="_blank" rel="noopener noreferrer">
+                            <Button size="sm" variant="ghost" className="h-6 w-7 p-0">
+                              <ExternalLink className="w-3 h-3" />
+                            </Button>
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                  </Card>
+                    </Card>
                   );
                 })}
               </div>
@@ -619,7 +618,7 @@ export default function MarketResearch() {
                   <Badge variant="secondary" className="ml-2 text-xs font-normal bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">✓ Confirmed Sales</Badge>
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {analysis.soldListingsData.slice(0, 10).map((item: ListingItem) => (
+                  {analysis.soldListingsData.slice(0, 15).map((item: ListingItem) => (
                     <Card key={item.itemId} className="overflow-hidden border-emerald-500/20 hover:shadow-md transition-all group">
                       <div className="aspect-square bg-secondary relative overflow-hidden">
                         {item.galleryUrl ? (
@@ -630,10 +629,18 @@ export default function MarketResearch() {
                           </div>
                         )}
                         <div className="absolute top-1 left-1 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-md font-medium">SOLD</div>
+                        {(item.watchCount ?? 0) > 0 && (
+                          <div className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] px-1.5 py-0.5 rounded-md">👁 {item.watchCount}</div>
+                        )}
                       </div>
                       <div className="p-2.5">
                         <p className="text-xs font-medium line-clamp-2 leading-snug mb-1.5">{item.title}</p>
-                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">${item.price.toFixed(2)}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">${item.price.toFixed(2)}</span>
+                          <a href={item.viewItemUrl} target="_blank" rel="noopener noreferrer">
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0"><ExternalLink className="w-3 h-3" /></Button>
+                          </a>
+                        </div>
                       </div>
                     </Card>
                   ))}
@@ -649,7 +656,7 @@ export default function MarketResearch() {
             <BarChart3 className="w-12 h-12 mx-auto text-muted-foreground/20 mb-4" />
             <h3 className="font-semibold text-muted-foreground">Enter a keyword to analyze the market</h3>
             <p className="text-sm text-muted-foreground/70 mt-1 max-w-sm mx-auto">
-              Get live sell-through rates, demand scores, opportunity analysis, and profit calculator
+              Get live sell-through rates, Hot Score, sales velocity, profit potential, and full market breakdown
             </p>
           </Card>
         )}

@@ -11,7 +11,7 @@ import {
   DollarSign, Clock, RefreshCw, ArrowUp, ArrowDown, Minus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, buildApiUrl } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -103,17 +103,17 @@ export default function TrendingPage() {
 
   const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
 
-  const { data, isLoading, error, refetch } = useQuery<{ items: TrendingItem[] }>({
+  const { data, isLoading, error, refetch } = useQuery<{ items: TrendingItem[]; source?: string }>({
     queryKey: ["/api/ebay/trending", categoryId, marketplace, sortMode, timeRange],
     queryFn: async () => {
       const p = new URLSearchParams({ marketplace, sortMode, timeRange });
       if (categoryId && categoryId !== "all") p.set("categoryId", categoryId);
-      const res = await fetch(buildApiUrl(`/api/ebay/trending?${p}`));
-      if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
+      const res = await fetch(`/api/ebay/trending?${p}`);
+      if (!res.ok) return { items: [] };
       return res.json();
     },
     staleTime: AUTO_REFRESH_INTERVAL,
-    retry: false,
+    retry: 1,
     enabled: !!ebayStatus,
   });
 
@@ -174,6 +174,7 @@ export default function TrendingPage() {
         </div>
 
         {ebayStatus && !ebayStatus.configured && <EbaySetupBanner />}
+
 
         {/* Controls */}
         <Card className="p-4 border-border/60">

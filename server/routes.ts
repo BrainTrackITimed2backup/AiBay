@@ -42,6 +42,7 @@ import { searchSuppliers, buildSearchUrls } from "./services/supplierFinder";
 import { z } from "zod";
 import archiver from "archiver";
 import axios from "axios";
+import { registerUser, loginUser, getUserById, getAllUsers } from "./auth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -171,17 +172,31 @@ export async function registerRoutes(
       const items = await getTrendingItems(categoryId, marketplace, sortMode, timeRange);
       res.json({ items, source: "live" });
     } catch (error) {
-      // Never crash — return structured demo data so frontend always renders
-      console.warn("Trending live fetch failed, returning demo data:", error instanceof Error ? error.message : String(error));
-      const { generateDemoSearchResult } = await import("./services/ebayApi");
-      const demo = generateDemoSearchResult("trending electronics", false, 30, categoryId);
-      const demoItems = demo.items.map((it, i) => ({
-        ...it,
-        trendDirection: (["up", "up", "neutral", "down"] as const)[i % 4],
-        trendScore: Math.max(15, 95 - i * 2),
-        isDemo: true,
-      }));
-      res.json({ items: demoItems, source: "demo", message: "Using sample data — live eBay API unavailable" });
+      console.error("[trending] All sources failed:", error instanceof Error ? error.message : String(error));
+      res.status(503).json({ message: error instanceof Error ? error.message : "eBay trending data unavailable. Please try again later.", items: [] });
+    }
+  });
+
+  // ─── Live Market Pulse (dashboard ticker) ────────────────────────────────────
+  app.get("/api/ebay/pulse", async (req, res) => {
+    const marketplace = String(req.query.marketplace || "EBAY-US");
+    try {
+      // Fetch a quick snapshot of hot keywords for the live ticker
+      const hotKeywords = ["iPhone", "AirPods", "PlayStation 5", "Nintendo Switch", "MacBook", "Vintage Watch", "Sneakers", "LEGO"];
+      const keyword = hotKeywords[Math.floor(Date.now() / (10 * 60 * 1000)) % hotKeywords.length];
+      const { findItemsByKeywords: findItems } = await import("./services/ebayApi");
+      const result = await findItems(keyword, { marketplace, pageSize: 5 });
+      const prices = result.items.map((i: any) => i.price).filter((p: any) => p > 0);
+      const avgPrice = prices.length ? prices.reduce((a: number, b: number) => a + b, 0) / prices.length : 0;
+      res.json({
+        keyword,
+        totalResults: result.totalEntries,
+        avgPrice: Math.round(avgPrice * 100) / 100,
+        hotItems: result.items.slice(0, 3).map((i: any) => ({ title: i.title.slice(0, 50), price: i.price, watchCount: i.watchCount })),
+        timestamp: Date.now(),
+      });
+    } catch {
+      res.json({ keyword: "Electronics", totalResults: 0, avgPrice: 0, hotItems: [], timestamp: Date.now() });
     }
   });
 
@@ -1265,73 +1280,6 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Admin Settings / SaaS Plans ──────────────────────────────────────────
-  const adminSettingsSchema = z.object({
-    siteName: z.string().min(1).max(100),
-    supportEmail: z.string().email(),
-    registrationEnabled: z.boolean(),
-    maintenanceMode: z.boolean(),
-    defaultTrialDays: z.number().int().min(0).max(365),
-    trialPriceUsd: z.string(),
-    enableWisePayments: z.boolean(),
-    featureFlags: z.record(z.boolean()),
-  });
-
-  const subscriptionPlanSchema = z.object({
-    name: z.string().min(1).max(100),
-    slug: z.string().min(1).max(100),
-    priceUsd: z.string(),
-    billingInterval: z.enum(["monthly", "quarterly", "semiannual", "annual", "lifetime"]),
-    trialDays: z.number().int().min(0).max(365),
-    isActive: z.boolean(),
-    features: z.array(z.string()).max(50),
-  });
-
-  app.get("/api/admin/settings", async (_req, res) => {
-    const settings = await storage.getAdminSettings();
-    res.json(settings || null);
-  });
-
-  app.patch("/api/admin/settings", async (req, res) => {
-    try {
-      const data = adminSettingsSchema.partial().parse(req.body);
-      const settings = await storage.upsertAdminSettings(data);
-      res.json(settings);
-    } catch (error) {
-      res.status(400).json({ message: error instanceof Error ? error.message : "Error" });
-    }
-  });
-
-  app.get("/api/admin/plans", async (_req, res) => {
-    const plans = await storage.getSubscriptionPlans();
-    res.json(plans);
-  });
-
-  app.post("/api/admin/plans", async (req, res) => {
-    try {
-      const data = subscriptionPlanSchema.parse(req.body);
-      const plan = await storage.createSubscriptionPlan(data);
-      res.json(plan);
-    } catch (error) {
-      res.status(400).json({ message: error instanceof Error ? error.message : "Error" });
-    }
-  });
-
-  app.put("/api/admin/plans/:id", async (req, res) => {
-    try {
-      const data = subscriptionPlanSchema.partial().parse(req.body);
-      const plan = await storage.updateSubscriptionPlan(Number(req.params.id), data);
-      res.json(plan);
-    } catch (error) {
-      res.status(400).json({ message: error instanceof Error ? error.message : "Error" });
-    }
-  });
-
-  app.delete("/api/admin/plans/:id", async (req, res) => {
-    await storage.deleteSubscriptionPlan(Number(req.params.id));
-    res.json({ success: true });
-  });
-
   // ─── Watchlist Refresh ────────────────────────────────────────────────────
   app.post("/api/watchlist/:id/refresh", async (req, res) => {
     try {
@@ -1624,6 +1572,195 @@ export async function registerRoutes(
   // ─── Health Check (required by Render for deployment health) ─────────────
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", ts: Date.now(), version: "2.0.0" });
+  });
+
+  // ─── Auth Routes ─────────────────────────────────────────────────────────
+
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, email, password } = req.body;
+      const user = await registerUser(username, email, password);
+      req.session.userId = user.id;
+      res.status(201).json(user);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Registration failed" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      const user = await loginUser(email, password);
+      req.session.userId = user.id;
+      res.json(user);
+    } catch (error) {
+      res.status(401).json({ message: error instanceof Error ? error.message : "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) return res.status(500).json({ message: "Logout failed" });
+      res.clearCookie("connect.sid");
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    if (!req.session?.userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    try {
+      const user = await getUserById(req.session.userId);
+      if (!user) {
+        req.session.destroy(() => {});
+        return res.status(401).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get user" });
+    }
+  });
+
+  // ─── Admin: Users ─────────────────────────────────────────────────────────
+
+  app.get("/api/admin/users", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const users = await getAllUsers();
+      res.json({ users, count: users.length });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // ─── Social Trend Spy (Pollinations AI) ──────────────────────────────────
+
+  // Cache trending data for 6 hours to avoid hammering Pollinations
+  let trendCache: { data: any; ts: number } | null = null;
+  const TREND_CACHE_TTL = 6 * 60 * 60 * 1000;
+
+  app.get("/api/ad-spy/trending", async (req, res) => {
+    try {
+      const category = (req.query.category as string) || "all";
+
+      if (trendCache && Date.now() - trendCache.ts < TREND_CACHE_TTL) {
+        const cached = trendCache.data;
+        const filtered = category === "all"
+          ? cached
+          : cached.filter((p: any) => p.categoryKey === category);
+        return res.json({ products: filtered, source: "cache", ts: trendCache.ts });
+      }
+
+      const today = new Date().toISOString().split("T")[0];
+      const prompt = `You are a product trend analyst for eBay dropshipping. Today is ${today}.
+Generate exactly 25 viral trending products from TikTok, Instagram, YouTube and Facebook that have high eBay sell-through potential right now.
+
+Return a JSON array (no markdown, no explanation, just the array) where each element has:
+{
+  "title": "Exact eBay-optimised product title (max 70 chars)",
+  "platform": one of ["TikTok", "Instagram", "YouTube", "Facebook", "Pinterest"],
+  "trendScore": integer 70-99,
+  "estimatedSearchVolume": "e.g. 85K/mo",
+  "avgPrice": "e.g. $12-28",
+  "category": "Short category name",
+  "categoryKey": one of ["tech", "fashion", "home", "beauty", "pets", "sports", "toys"],
+  "tags": ["#tag1", "#tag2", "#tag3"],
+  "ebayOpportunity": one of ["Hot", "High", "Medium", "Low"],
+  "winScore": integer 65-97,
+  "emoji": "single emoji for the product",
+  "trendReason": "1 sentence on why it's trending now"
+}
+
+Make them realistic, current, and varied across all category keys. No placeholder text.`;
+
+      // Use Pollinations GET API — openai-fast (only available model), returns markdown-fenced JSON
+      const pollinationsUrl = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=openai`;
+      const response = await axios.get(pollinationsUrl, { timeout: 40000, responseType: "text" });
+      const raw: string = typeof response.data === "string" ? response.data : JSON.stringify(response.data);
+
+      // Strip markdown code fences (```json ... ``` or ``` ... ```)
+      function stripMarkdown(text: string): string {
+        return text.replace(/```(?:json)?\s*/gi, "").replace(/```\s*/g, "").trim();
+      }
+
+      // Find the first [ ... ] array via bracket counting (handles whitespace between [ and {)
+      function extractJsonArray(text: string): string | null {
+        const start = text.indexOf("[");
+        if (start === -1) return null;
+        let depth = 0;
+        for (let i = start; i < text.length; i++) {
+          if (text[i] === "[") depth++;
+          else if (text[i] === "]") {
+            depth--;
+            if (depth === 0) return text.slice(start, i + 1);
+          }
+        }
+        return null;
+      }
+
+      // Step 1: Check for Pollinations structured response format {role, reasoning, content}
+      // The content field holds the final answer (the JSON array)
+      let searchText = raw;
+      try {
+        const outerObj = JSON.parse(raw);
+        if (outerObj && typeof outerObj === "object" && !Array.isArray(outerObj)) {
+          if (outerObj.content !== undefined && outerObj.content !== null) {
+            const c = outerObj.content;
+            searchText = typeof c === "string" ? c : JSON.stringify(c);
+          }
+          // If content is the array directly
+          if (Array.isArray(outerObj.content) && outerObj.content.length > 0) {
+            const cached2 = outerObj.content;
+            trendCache = { data: cached2, ts: Date.now() };
+            const filtered2 = category === "all" ? cached2 : cached2.filter((p: any) => p.categoryKey === category);
+            return res.json({ products: filtered2, source: "ai", ts: Date.now() });
+          }
+        } else if (Array.isArray(outerObj) && outerObj.length > 0) {
+          searchText = raw; // already an array string
+        }
+      } catch { /* raw is plain text, not JSON wrapper */ }
+
+      const cleaned = stripMarkdown(searchText);
+      console.log(`[ad-spy] raw len=${raw.length}, searchText first200=${searchText.substring(0, 200)}`);
+
+      // Step 2: Try direct parse + bracket extraction on cleaned, searchText, raw
+      let products: any[] | null = null;
+      for (const candidate of [cleaned, searchText, raw]) {
+        if (products) break;
+        try {
+          const parsed = JSON.parse(candidate.trim());
+          if (Array.isArray(parsed) && parsed.length > 0) { products = parsed; break; }
+        } catch { /* try extraction */ }
+        try {
+          const extracted = extractJsonArray(candidate);
+          if (extracted) {
+            const parsed = JSON.parse(extracted);
+            if (Array.isArray(parsed) && parsed.length > 0) { products = parsed; break; }
+          }
+        } catch { /* continue */ }
+      }
+      if (!products || products.length === 0) throw new Error("No JSON array found in AI response");
+      if (!Array.isArray(products) || products.length === 0) {
+        throw new Error("Invalid product array from AI");
+      }
+
+      trendCache = { data: products, ts: Date.now() };
+
+      const filtered = category === "all"
+        ? products
+        : products.filter((p: any) => p.categoryKey === category);
+
+      res.json({ products: filtered, source: "ai", ts: Date.now() });
+    } catch (error) {
+      console.error("[ad-spy/trending] Error:", error);
+      res.status(503).json({
+        message: "Trend data temporarily unavailable. Please try again in a moment.",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   });
 
   return httpServer;
