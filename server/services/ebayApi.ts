@@ -207,6 +207,11 @@ function setCache(key: string, data: any, ttlMs: number): void {
   cache.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
+function isRateLimitError(err: any): boolean {
+  const data = err?.response?.data ? JSON.stringify(err.response.data) : "";
+  return data.includes("10001") || data.includes("RateLimiter");
+}
+
 // ─── App ID Helper ────────────────────────────────────────────────────────────
 export function getEbayAppId(): string | null {
   return process.env.EBAY_APP_ID || null;
@@ -411,17 +416,20 @@ export async function findItemsByKeywords(
     const totalPages = parseInt(resp.paginationOutput?.[0]?.totalPages?.[0] || "1");
 
     const result = { items, totalEntries, totalPages };
-    setCache(cacheKey, result, 3 * 60 * 1000);
+    setCache(cacheKey, result, 15 * 60 * 1000);
     return result;
   } catch (apiErr: any) {
+    if (isRateLimitError(apiErr)) {
+      throw new Error("eBay API rate limit reached — please wait a few minutes and try again.");
+    }
     console.warn(`[eBay] findItemsByKeywords API failed (${apiErr?.response?.status || apiErr?.message}), falling back to scraper`);
     try {
       const scraped = await scrapeEbaySearch(keywords, { marketplace, sold: false, categoryId: options.categoryId, minPrice: options.minPrice, maxPrice: options.maxPrice, pageSize: options.pageSize });
       const result: EbaySearchResult = { items: scraped.items as EbayItem[], totalEntries: scraped.totalEntries, totalPages: Math.ceil(scraped.totalEntries / (options.pageSize || 20)) };
-      setCache(cacheKey, result, 3 * 60 * 1000);
+      setCache(cacheKey, result, 15 * 60 * 1000);
       return result;
     } catch (scrapeErr: any) {
-      throw new Error(`eBay data unavailable: ${scrapeErr?.message || "bot detection active"}. Please configure EBAY_APP_ID for reliable access.`);
+      throw new Error(`eBay live data unavailable: ${scrapeErr?.message || "connection blocked"}. Try again shortly.`);
     }
   }
 }
@@ -503,6 +511,9 @@ export async function findCompletedItems(
   try {
     const response = await axios.get(url, { timeout: 15000 });
     const data = response.data;
+    if (isRateLimitError({ response })) {
+      throw new Error("eBay API rate limit reached — please wait a few minutes and try again.");
+    }
     const resp = data["findCompletedItemsResponse"]?.[0];
     const ack = resp?.ack?.[0];
     if (ack !== "Success" && ack !== "Warning") {
@@ -513,17 +524,20 @@ export async function findCompletedItems(
     const totalEntries = parseInt(resp.paginationOutput?.[0]?.totalEntries?.[0] || "0");
     const totalPages = parseInt(resp.paginationOutput?.[0]?.totalPages?.[0] || "1");
     const result = { items, totalEntries, totalPages };
-    setCache(cacheKey, result, 3 * 60 * 1000);
+    setCache(cacheKey, result, 15 * 60 * 1000);
     return result;
   } catch (err: any) {
+    if (isRateLimitError(err) || err?.message?.includes("rate limit")) {
+      throw new Error("eBay API rate limit reached — please wait a few minutes and try again.");
+    }
     console.warn(`[eBay] findCompletedItems failed: ${err?.message}`);
     try {
       const scraped = await scrapeEbaySearch(keywords, { marketplace, sold: true, categoryId: options.categoryId, pageSize: options.pageSize || 50 });
       const result: EbaySearchResult = { items: scraped.items as EbayItem[], totalEntries: scraped.totalEntries, totalPages: 1 };
-      setCache(cacheKey, result, 3 * 60 * 1000);
+      setCache(cacheKey, result, 15 * 60 * 1000);
       return result;
     } catch (scrapeErr: any) {
-      throw new Error(`eBay sold items unavailable: ${scrapeErr?.message || "bot detection active"}.`);
+      throw new Error(`eBay sold data unavailable: ${scrapeErr?.message || "connection blocked"}. Try again shortly.`);
     }
   }
 }
@@ -739,6 +753,9 @@ export async function getTrendingItems(
       isSold: isCompletedMode,
     }));
   } catch (apiErr: any) {
+    if (isRateLimitError(apiErr) || apiErr?.message?.includes("rate limit")) {
+      throw new Error("eBay API rate limit reached — please wait a few minutes and try again.");
+    }
     console.warn(`[eBay] getTrendingItems API failed (${apiErr?.response?.status || apiErr?.message}), falling back to scraper`);
     try {
       const query = categoryId ? "" : sortMode === "mostSold" ? "bestseller" : "popular items";
@@ -753,7 +770,7 @@ export async function getTrendingItems(
       setCache(cacheKey, trending, 5 * 60 * 1000);
       return trending;
     } catch (scrapeErr: any) {
-      throw new Error(`eBay trending data unavailable: ${scrapeErr?.message || "bot detection active"}. Please configure EBAY_APP_ID for reliable access.`);
+      throw new Error(`eBay trending data unavailable: ${scrapeErr?.message || "connection blocked"}. Try again shortly.`);
     }
   }
 
