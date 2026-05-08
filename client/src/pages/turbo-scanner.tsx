@@ -109,10 +109,10 @@ export default function TurboScanner() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ capabilities: { scraping: boolean; apiKeyConfigured: boolean; liveMode: string } }>({ queryKey: ["/api/market/status"] });
 
   const { data, isLoading, error } = useQuery<{ items: any[]; totalEntries: number }>({
-    queryKey: ["/api/ebay/turbo-scan", scanParams],
+    queryKey: ["/api/market/turbo-scan", scanParams],
     queryFn: async () => {
       if (!scanParams) return { items: [], totalEntries: 0 };
       const p = new URLSearchParams({
@@ -122,7 +122,7 @@ export default function TurboScanner() {
         ...(scanParams.maxPrice && { maxPrice: scanParams.maxPrice }),
         ...(scanParams.condition && scanParams.condition !== "all" && { condition: scanParams.condition }),
       });
-      const res = await fetch(buildApiUrl(`/api/ebay/turbo-scan?${p}`));
+      const res = await fetch(buildApiUrl(`/api/market/turbo-scan?${p}`));
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },
@@ -232,7 +232,7 @@ export default function TurboScanner() {
           </p>
         </div>
 
-        {ebayStatus && !ebayStatus.configured && <EbaySetupBanner />}
+        {ebayStatus && !ebayStatus.capabilities.apiKeyConfigured && <EbaySetupBanner />}
 
         {/* Config */}
         <Card className="p-4 border-border/60">

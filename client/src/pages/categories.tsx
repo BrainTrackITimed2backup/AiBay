@@ -196,9 +196,9 @@ function CategoryCard({ category, onResearch }: { category: Category; onResearch
   const { data: stats, isLoading } = useQuery<{
     totalActive?: number; avgPrice?: number; sellThroughRate?: number; topItems?: { itemId: string; title: string; price: number; galleryUrl?: string }[];
   }>({
-    queryKey: ["/api/ebay/category", category.id, "stats"],
+    queryKey: ["/api/market/category", category.id, "stats"],
     queryFn: async () => {
-      const res = await fetch(buildApiUrl(`/api/ebay/category/${category.id}/stats`));
+      const res = await fetch(buildApiUrl(`/api/market/category/${category.id}/stats`));
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -374,7 +374,7 @@ export default function CategoriesPage() {
   const [, setLocation] = useLocation();
   const [searchFilter, setSearchFilter] = useState("");
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ capabilities: { scraping: boolean; apiKeyConfigured: boolean; liveMode: string } }>({ queryKey: ["/api/market/status"] });
 
   function handleResearch(categoryId: string) {
     setLocation(`/market-research?categoryId=${categoryId}`);
@@ -400,7 +400,7 @@ export default function CategoriesPage() {
           </p>
         </div>
 
-        {ebayStatus && !ebayStatus.configured && <EbaySetupBanner />}
+        {ebayStatus && !ebayStatus.capabilities.apiKeyConfigured && <EbaySetupBanner />}
 
         {/* Legend */}
         <div className="flex items-center gap-3 flex-wrap">

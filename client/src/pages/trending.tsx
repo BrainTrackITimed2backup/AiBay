@@ -101,14 +101,14 @@ export default function TrendingPage() {
   const qc = useQueryClient();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ capabilities: { scraping: boolean; apiKeyConfigured: boolean; liveMode: string } }>({ queryKey: ["/api/market/status"] });
 
   const { data, isLoading, error, refetch } = useQuery<{ items: TrendingItem[]; source?: string }>({
-    queryKey: ["/api/ebay/trending", categoryId, marketplace, sortMode, timeRange],
+    queryKey: ["/api/market/trending", categoryId, marketplace, sortMode, timeRange],
     queryFn: async () => {
       const p = new URLSearchParams({ marketplace, sortMode, timeRange });
       if (categoryId && categoryId !== "all") p.set("categoryId", categoryId);
-      const res = await fetch(`/api/ebay/trending?${p}`);
+      const res = await fetch(`/api/market/trending?${p}`);
       if (!res.ok) return { items: [] };
       return res.json();
     },
@@ -173,7 +173,7 @@ export default function TrendingPage() {
           </div>
         </div>
 
-        {ebayStatus && !ebayStatus.configured && <EbaySetupBanner />}
+        {ebayStatus && !ebayStatus.capabilities.apiKeyConfigured && <EbaySetupBanner />}
 
 
         {/* Controls */}
@@ -341,7 +341,7 @@ export default function TrendingPage() {
         )}
 
         {/* Empty */}
-        {!isLoading && !error && items.length === 0 && ebayStatus?.configured && (
+        {!isLoading && !error && items.length === 0 && ebayStatus?.capabilities.apiKeyConfigured && (
           <Card className="p-16 text-center border-dashed border-border/60">
             <TrendingUp className="w-12 h-12 mx-auto text-muted-foreground/20 mb-4" />
             <h3 className="font-semibold text-muted-foreground">No results for this filter</h3>

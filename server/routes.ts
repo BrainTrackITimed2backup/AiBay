@@ -49,6 +49,18 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
+
+  const marketCapabilities = () => ({
+    scraping: true,
+    apiKeyConfigured: !!getEbayAppId(),
+    liveMode: "scrape-first" as const,
+  });
+
+  const registerMarketGet = (path: string, handler: Parameters<Express["get"]>[1]) => {
+    app.get(`/api/market${path}`, handler);
+    // Deprecated alias: keep /api/ebay/* temporarily for backward compatibility.
+    app.get(`/api/ebay${path}`, handler);
+  };
   // ─── Listing Generation ──────────────────────────────────────────────────────
   app.post(api.listings.generate.path, async (req, res) => {
     try {
@@ -119,7 +131,7 @@ export async function registerRoutes(
         totalWatchlist,
         totalTrackedSellers,
         keywordSearchesToday,
-        ebayConfigured: !!getEbayAppId(),
+        marketCapabilities: marketCapabilities(),
       });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Error" });
@@ -131,17 +143,17 @@ export async function registerRoutes(
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // ─── eBay Status ─────────────────────────────────────────────────────────────
-  app.get("/api/ebay/status", (req, res) => {
-    res.json({ configured: !!getEbayAppId() });
+  // ─── Market Status ───────────────────────────────────────────────────────────
+  registerMarketGet("/status", (_req, res) => {
+    res.json({ capabilities: marketCapabilities() });
   });
 
-  app.get("/api/ebay/categories", (req, res) => {
+  registerMarketGet("/categories", (_req, res) => {
     res.json({ categories: EBAY_CATEGORIES, marketplaces: MARKETPLACES });
   });
 
   // ─── Market Research ─────────────────────────────────────────────────────────
-  app.get("/api/ebay/search", async (req, res) => {
+  registerMarketGet("/search", async (req, res) => {
     try {
       const keyword = String(req.query.keyword || "");
       const marketplace = String(req.query.marketplace || "EBAY-US");
@@ -163,7 +175,7 @@ export async function registerRoutes(
   });
 
   // ─── Trending Items ──────────────────────────────────────────────────────────
-  app.get("/api/ebay/trending", async (req, res) => {
+  registerMarketGet("/trending", async (req, res) => {
     const categoryId = req.query.categoryId ? String(req.query.categoryId) : undefined;
     const marketplace = String(req.query.marketplace || "EBAY-US");
     const sortMode = String(req.query.sortMode || "watchCount");
@@ -178,7 +190,7 @@ export async function registerRoutes(
   });
 
   // ─── Live Market Pulse (dashboard ticker) ────────────────────────────────────
-  app.get("/api/ebay/pulse", async (req, res) => {
+  registerMarketGet("/pulse", async (req, res) => {
     const marketplace = String(req.query.marketplace || "EBAY-US");
     try {
       // Fetch a quick snapshot of hot keywords for the live ticker
@@ -201,7 +213,7 @@ export async function registerRoutes(
   });
 
   // ─── Completed (Sold) Items ──────────────────────────────────────────────────
-  app.get("/api/ebay/completed", async (req, res) => {
+  registerMarketGet("/completed", async (req, res) => {
     try {
       const keyword = String(req.query.keyword || "");
       const marketplace = String(req.query.marketplace || "EBAY-US");
@@ -220,7 +232,7 @@ export async function registerRoutes(
   });
 
   // ─── Turbo Scanner ───────────────────────────────────────────────────────────
-  app.get("/api/ebay/turbo-scan", async (req, res) => {
+  registerMarketGet("/turbo-scan", async (req, res) => {
     try {
       const categoryId = String(req.query.categoryId || "293");
       const marketplace = String(req.query.marketplace || "EBAY-US");
@@ -251,7 +263,7 @@ export async function registerRoutes(
   });
 
   // ─── Seller Profile ──────────────────────────────────────────────────────────
-  app.get("/api/ebay/seller/:username", async (req, res) => {
+  registerMarketGet("/seller/:username", async (req, res) => {
     try {
       const { username } = req.params;
       const marketplace = String(req.query.marketplace || "EBAY-US");
@@ -284,7 +296,7 @@ export async function registerRoutes(
   });
 
   // ─── Seller Listings (paginated) ────────────────────────────────────────────
-  app.get("/api/ebay/seller/:username/listings", async (req, res) => {
+  registerMarketGet("/seller/:username/listings", async (req, res) => {
     try {
       const { username } = req.params;
       const marketplace = String(req.query.marketplace || "EBAY-US");
@@ -297,7 +309,7 @@ export async function registerRoutes(
   });
 
   // ─── Category Stats ──────────────────────────────────────────────────────────
-  app.get("/api/ebay/category/:categoryId/stats", async (req, res) => {
+  registerMarketGet("/category/:categoryId/stats", async (req, res) => {
     try {
       const { categoryId } = req.params;
       const marketplace = String(req.query.marketplace || "EBAY-US");
@@ -944,7 +956,7 @@ export async function registerRoutes(
   });
 
   // ─── eBay Item Details (Shopping API GetSingleItem) ─────────────────────
-  app.get("/api/ebay/item/:itemId", async (req, res) => {
+  registerMarketGet("/item/:itemId", async (req, res) => {
     try {
       const detail = await getItemDetails(req.params.itemId);
       if (!detail) return res.status(404).json({ message: "Item not found or EBAY_APP_ID not configured" });
@@ -955,7 +967,7 @@ export async function registerRoutes(
   });
 
   // ─── eBay Sold Summary (for supplier cross-reference) ─────────────────────
-  app.get("/api/ebay/sold-summary", async (req, res) => {
+  registerMarketGet("/sold-summary", async (req, res) => {
     try {
       const keyword = String(req.query.q || "").trim();
       const marketplace = String(req.query.marketplace || "EBAY-US");

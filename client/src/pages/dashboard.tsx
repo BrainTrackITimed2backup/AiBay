@@ -109,12 +109,12 @@ function QuickAnalyzer() {
   const [query, setQuery] = useState<string | null>(null);
   const [, setLocation] = useLocation();
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ capabilities: { scraping: boolean; apiKeyConfigured: boolean; liveMode: string } }>({ queryKey: ["/api/market/status"] });
 
   const { data, isLoading, error } = useQuery<any>({
-    queryKey: ["/api/ebay/search", query],
+    queryKey: ["/api/market/search", query],
     queryFn: async () => {
-      const res = await fetch(buildApiUrl(`/api/ebay/search?keyword=${encodeURIComponent(query!)}`));
+      const res = await fetch(buildApiUrl(`/api/market/search?keyword=${encodeURIComponent(query!)}`));
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },
@@ -135,7 +135,7 @@ function QuickAnalyzer() {
           <Zap className="w-3.5 h-3.5 text-primary" />
         </div>
         <span className="font-semibold text-sm">Quick Analyzer</span>
-        {!ebayStatus?.configured && (
+        {!ebayStatus?.capabilities.apiKeyConfigured && (
           <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-400">Setup required</Badge>
         )}
       </div>
@@ -210,9 +210,9 @@ export default function Dashboard() {
   });
 
   const { data: hotData } = useQuery<{ items: any[] }>({
-    queryKey: ["/api/ebay/trending", "all", "EBAY-US"],
+    queryKey: ["/api/market/trending", "all", "EBAY-US"],
     queryFn: async () => {
-      const res = await fetch(buildApiUrl("/api/ebay/trending?marketplace=EBAY-US"));
+      const res = await fetch(buildApiUrl("/api/market/trending?marketplace=EBAY-US"));
       if (!res.ok) return { items: [] };
       return res.json();
     },
@@ -296,7 +296,7 @@ export default function Dashboard() {
           {stats && !stats.ebayConfigured && (
             <div className="relative mt-4 flex items-center gap-2 bg-amber-400/20 border border-amber-400/30 rounded-lg px-4 py-2.5 w-fit">
               <span className="text-amber-200 text-sm font-medium">
-                ⚡ Add <code className="font-mono text-xs bg-amber-500/30 px-1.5 py-0.5 rounded">EBAY_APP_ID</code> to Secrets to unlock live market data
+                ⚡ Add <code className="font-mono text-xs bg-amber-500/30 px-1.5 py-0.5 rounded">market API credentials</code> to Secrets to unlock live market data
               </span>
             </div>
           )}

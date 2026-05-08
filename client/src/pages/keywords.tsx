@@ -174,7 +174,7 @@ export default function KeywordsPage() {
   const { toast } = useToast();
   const dragWord = useRef<string | null>(null);
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ capabilities: { scraping: boolean; apiKeyConfigured: boolean; liveMode: string } }>({ queryKey: ["/api/market/status"] });
   const { data: recentSearches } = useQuery<any[]>({ queryKey: ["/api/keywords/history"] });
 
   const {
@@ -275,7 +275,7 @@ export default function KeywordsPage() {
           </p>
         </div>
 
-        {ebayStatus && !ebayStatus.configured && <EbaySetupBanner />}
+        {ebayStatus && !ebayStatus.capabilities.apiKeyConfigured && <EbaySetupBanner />}
 
         {/* Search Form */}
         <Card className="p-5 border-border/60">

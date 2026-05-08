@@ -307,16 +307,16 @@ export default function MarketResearch() {
     }
   }, []);
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ capabilities: { scraping: boolean; apiKeyConfigured: boolean; liveMode: string } }>({ queryKey: ["/api/market/status"] });
 
   const { data: analysis, isLoading, error } = useQuery<MarketAnalysis>({
-    queryKey: ["/api/ebay/search", searchQuery?.keyword, searchQuery?.marketplace, searchQuery?.categoryId, searchQuery?.timeRange],
+    queryKey: ["/api/market/search", searchQuery?.keyword, searchQuery?.marketplace, searchQuery?.categoryId, searchQuery?.timeRange],
     queryFn: async () => {
       if (!searchQuery) return null;
       const params = new URLSearchParams({ keyword: searchQuery.keyword, marketplace: searchQuery.marketplace });
       if (searchQuery.categoryId) params.set("categoryId", searchQuery.categoryId);
       if (searchQuery.timeRange) params.set("timeRange", searchQuery.timeRange);
-      const res = await fetch(`/api/ebay/search?${params}`);
+      const res = await fetch(`/api/market/search?${params}`);
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "Failed"); }
       return res.json();
     },
@@ -374,7 +374,7 @@ export default function MarketResearch() {
           </p>
         </div>
 
-        {ebayStatus && !ebayStatus.configured && <EbaySetupBanner />}
+        {ebayStatus && !ebayStatus.capabilities.apiKeyConfigured && <EbaySetupBanner />}
 
         {/* Search Bar */}
         <Card className="p-4 border-border/60">

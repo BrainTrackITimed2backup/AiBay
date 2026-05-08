@@ -102,13 +102,13 @@ export default function TopSellers() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ capabilities: { scraping: boolean; apiKeyConfigured: boolean; liveMode: string } }>({ queryKey: ["/api/market/status"] });
   const { data: savedSellers } = useQuery<SavedSeller[]>({ queryKey: ["/api/tracked-sellers"] });
 
   const { data: profile, isLoading: loadingProfile, error: profileError } = useQuery<SellerProfile>({
-    queryKey: ["/api/ebay/seller", searchedSeller],
+    queryKey: ["/api/market/seller", searchedSeller],
     queryFn: async () => {
-      const res = await fetch(buildApiUrl(`/api/ebay/seller/${searchedSeller}`));
+      const res = await fetch(buildApiUrl(`/api/market/seller/${searchedSeller}`));
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },
@@ -117,9 +117,9 @@ export default function TopSellers() {
   });
 
   const { data: listingsData, isLoading: loadingListings } = useQuery<{ items: SellerListing[]; totalPages: number; page: number }>({
-    queryKey: ["/api/ebay/seller", searchedSeller, "listings", listingsPage],
+    queryKey: ["/api/market/seller", searchedSeller, "listings", listingsPage],
     queryFn: async () => {
-      const res = await fetch(buildApiUrl(`/api/ebay/seller/${searchedSeller}/listings?page=${listingsPage}`));
+      const res = await fetch(buildApiUrl(`/api/market/seller/${searchedSeller}/listings?page=${listingsPage}`));
       if (!res.ok) throw new Error("Failed to load listings");
       return res.json();
     },
@@ -204,7 +204,7 @@ export default function TopSellers() {
           </Button>
         </div>
 
-        {ebayStatus && !ebayStatus.configured && <EbaySetupBanner />}
+        {ebayStatus && !ebayStatus.capabilities.apiKeyConfigured && <EbaySetupBanner />}
 
         {/* Compare mode chips */}
         {compareMode && compareProfiles.length > 0 && (

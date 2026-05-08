@@ -139,7 +139,7 @@ function EbaySoldPanel({ soldData, keyword, cheapestSupplierPrice }: {
           <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
           <div>
             <p className="text-sm font-medium text-amber-400">eBay API Not Configured</p>
-            <p className="text-xs text-muted-foreground">Add your EBAY_APP_ID to see live eBay sold prices alongside supplier costs. Get a free key at developer.ebay.com</p>
+            <p className="text-xs text-muted-foreground">Add market provider credentials in Settings → Secrets to see richer live sold-price coverage alongside supplier costs.</p>
           </div>
         </CardContent>
       </Card>
@@ -527,9 +527,9 @@ export default function SupplierFinderPage() {
   });
 
   const { data: ebayData, isLoading: ebayLoading } = useQuery<EbaySoldSummary>({
-    queryKey: ["/api/ebay/sold-summary", searchKeyword],
+    queryKey: ["/api/market/sold-summary", searchKeyword],
     queryFn: async () => {
-      const res = await fetch(buildApiUrl(`/api/ebay/sold-summary?q=${encodeURIComponent(searchKeyword)}`));
+      const res = await fetch(buildApiUrl(`/api/market/sold-summary?q=${encodeURIComponent(searchKeyword)}`));
       if (!res.ok) throw new Error("Failed to fetch eBay sold data");
       return res.json();
     },
