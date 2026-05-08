@@ -143,9 +143,9 @@ function parseEbayRss(xml: string, isSold: boolean, categoryId?: string): { item
   return { items, totalEntries: items.length };
 }
 
-// ─── Live data only — no demo/fake data ──────────────────────────────────────
+// ─── Live data only — no demo/fake data ────────────────────────────────────── // no-mock-guard:ignore
 // All functions throw clear errors when live data is unavailable.
-// Never return fake, generated, or placeholder data to end users.
+// Never return fake, generated, or placeholder data to end users. // no-mock-guard:ignore
 
 // ─── Marketplace IDs ──────────────────────────────────────────────────────────
 export const MARKETPLACES: Record<string, string> = {

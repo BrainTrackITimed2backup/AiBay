@@ -139,7 +139,7 @@ function EbaySoldPanel({ soldData, keyword, cheapestSupplierPrice }: {
           <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
           <div>
             <p className="text-sm font-medium text-amber-400">eBay API Not Configured</p>
-            <p className="text-xs text-muted-foreground">Add your EBAY_APP_ID to see live eBay sold prices alongside supplier costs. Get a free key at developer.ebay.com</p>
+            <p className="text-xs text-muted-foreground">Live sold-price scraping is enabled by default. Optional marketplace credentials can improve fetch reliability.</p>
           </div>
         </CardContent>
       </Card>

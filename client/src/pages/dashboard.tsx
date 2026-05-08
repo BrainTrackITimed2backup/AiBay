@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { buildApiUrl } from "@/lib/queryClient";
+import { REALTIME_INTERVALS, withJitter } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 
 interface Stats {
@@ -109,7 +110,7 @@ function QuickAnalyzer() {
   const [query, setQuery] = useState<string | null>(null);
   const [, setLocation] = useLocation();
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/market/status"] });
 
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ["/api/ebay/search", query],
@@ -202,7 +203,8 @@ export default function Dashboard() {
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ["/api/stats"],
-    refetchInterval: 30000,
+    refetchInterval: withJitter(REALTIME_INTERVALS.ticker),
+    refetchIntervalInBackground: true,
   });
 
   const { data: recentListings, isLoading: loadingListings } = useQuery<any[]>({
@@ -296,7 +298,7 @@ export default function Dashboard() {
           {stats && !stats.ebayConfigured && (
             <div className="relative mt-4 flex items-center gap-2 bg-amber-400/20 border border-amber-400/30 rounded-lg px-4 py-2.5 w-fit">
               <span className="text-amber-200 text-sm font-medium">
-                ⚡ Add <code className="font-mono text-xs bg-amber-500/30 px-1.5 py-0.5 rounded">EBAY_APP_ID</code> to Secrets to unlock live market data
+                ⚡ Live scraping is active. Optional marketplace credentials can improve reliability during peak anti-bot windows.
               </span>
             </div>
           )}

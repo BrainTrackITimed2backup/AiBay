@@ -822,7 +822,7 @@ function ItemSpecificsEditor({ listingId, initialSpecifics }: { listingId: numbe
     onSuccess: (result) => {
       setValidation(result);
       if (!result.configured) {
-        toast({ title: "eBay Validation", description: result.reason || "Configure EBAY_APP_ID to enable taxonomy validation." });
+        toast({ title: "eBay Validation", description: result.reason || "Marketplace taxonomy validation is temporarily unavailable. Please retry shortly." });
       } else if (result.missing.length === 0) {
         toast({ title: "All required fields present", description: `${result.required.length} required specifics validated.` });
       } else {

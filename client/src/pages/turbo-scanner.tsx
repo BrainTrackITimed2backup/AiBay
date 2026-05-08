@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, buildApiUrl } from "@/lib/queryClient";
+import { REALTIME_INTERVALS, withJitter } from "@/lib/realtime";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -109,7 +110,7 @@ export default function TurboScanner() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/market/status"] });
 
   const { data, isLoading, error } = useQuery<{ items: any[]; totalEntries: number }>({
     queryKey: ["/api/ebay/turbo-scan", scanParams],
@@ -128,6 +129,8 @@ export default function TurboScanner() {
     },
     enabled: !!scanParams,
     staleTime: 5 * 60 * 1000,
+    refetchInterval: withJitter(REALTIME_INTERVALS.analytics),
+    refetchIntervalInBackground: true,
   });
 
   function handleScan() {
