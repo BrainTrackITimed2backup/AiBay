@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { REALTIME_INTERVALS, withJitter } from "@/lib/realtime";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -101,7 +102,7 @@ export default function TrendingPage() {
   const qc = useQueryClient();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/market/status"] });
 
   const { data, isLoading, error, refetch } = useQuery<{ items: TrendingItem[]; source?: string }>({
     queryKey: ["/api/ebay/trending", categoryId, marketplace, sortMode, timeRange],
@@ -115,6 +116,8 @@ export default function TrendingPage() {
     staleTime: AUTO_REFRESH_INTERVAL,
     retry: 1,
     enabled: !!ebayStatus,
+    refetchInterval: withJitter(REALTIME_INTERVALS.trends),
+    refetchIntervalInBackground: true,
   });
 
   // Countdown timer — resets when any filter changes

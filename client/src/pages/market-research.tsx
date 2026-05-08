@@ -307,7 +307,7 @@ export default function MarketResearch() {
     }
   }, []);
 
-  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/ebay/status"] });
+  const { data: ebayStatus } = useQuery<{ configured: boolean }>({ queryKey: ["/api/market/status"] });
 
   const { data: analysis, isLoading, error } = useQuery<MarketAnalysis>({
     queryKey: ["/api/ebay/search", searchQuery?.keyword, searchQuery?.marketplace, searchQuery?.categoryId, searchQuery?.timeRange],
@@ -322,7 +322,8 @@ export default function MarketResearch() {
     },
     enabled: !!searchQuery,
     staleTime: 3 * 60 * 1000,
-    refetchInterval: 3 * 60 * 1000,
+    refetchInterval: withJitter(REALTIME_INTERVALS.analytics),
+    refetchIntervalInBackground: true,
   });
 
   function handleSearch(e: React.FormEvent) {

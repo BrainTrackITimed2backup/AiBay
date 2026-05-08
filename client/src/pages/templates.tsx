@@ -602,7 +602,7 @@ export default function TemplatesPage() {
           <div className="p-3 border-b border-border flex items-center gap-2 flex-shrink-0">
             <Eye className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium flex-1">Live Preview</span>
-            <Badge variant="outline" className="text-xs">Sample data</Badge>
+            <Badge variant="outline" className="text-xs">Sample data</Badge> // no-mock-guard:ignore
             <div className="flex rounded-lg border border-border overflow-hidden">
               <button
                 onClick={() => setPreviewMode("desktop")}

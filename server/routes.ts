@@ -43,6 +43,7 @@ import { z } from "zod";
 import archiver from "archiver";
 import axios from "axios";
 import { registerUser, loginUser, getUserById, getAllUsers } from "./auth";
+import { assertNoFallback, isLiveDataRequired } from "./config/liveDataPolicy";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -119,7 +120,7 @@ export async function registerRoutes(
         totalWatchlist,
         totalTrackedSellers,
         keywordSearchesToday,
-        ebayConfigured: !!getEbayAppId(),
+        ebayConfigured: true,
       });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Error" });
@@ -131,10 +132,20 @@ export async function registerRoutes(
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // ─── eBay Status ─────────────────────────────────────────────────────────────
-  app.get("/api/ebay/status", (req, res) => {
-    res.json({ configured: !!getEbayAppId() });
-  });
+  // ─── Marketplace Status ─────────────────────────────────────────────────────
+  const marketStatusHandler = (_req: any, res: any) => {
+    res.json({
+      configured: true,
+      mode: "scrape-first",
+      liveDataRequired: isLiveDataRequired(),
+      capabilities: {
+        liveScraping: true,
+        apiKeyConfigured: !!getEbayAppId(),
+      },
+    });
+  };
+  app.get("/api/ebay/status", marketStatusHandler);
+  app.get("/api/market/status", marketStatusHandler);
 
   app.get("/api/ebay/categories", (req, res) => {
     res.json({ categories: EBAY_CATEGORIES, marketplaces: MARKETPLACES });
@@ -195,8 +206,13 @@ export async function registerRoutes(
         hotItems: result.items.slice(0, 3).map((i: any) => ({ title: i.title.slice(0, 50), price: i.price, watchCount: i.watchCount })),
         timestamp: Date.now(),
       });
-    } catch {
-      res.json({ keyword: "Electronics", totalResults: 0, avgPrice: 0, hotItems: [], timestamp: Date.now() });
+    } catch (error) {
+      try {
+        assertNoFallback("Market pulse");
+      } catch (liveOnlyError) {
+        return res.status(503).json({ message: liveOnlyError instanceof Error ? liveOnlyError.message : "Live data unavailable" });
+      }
+      res.json({ keyword: "Electronics", totalResults: 0, avgPrice: 0, hotItems: [], timestamp: Date.now(), source: "fallback" });
     }
   });
 
@@ -916,7 +932,7 @@ export async function registerRoutes(
       const topCategoryId = categories[0].categoryId;
       const result = await getRequiredSpecificsForCategory(topCategoryId, specifics);
       if (!result.configured) {
-        return res.json({ ...result, reason: "eBay validation requires EBAY_APP_ID. Configure it in settings to unlock taxonomy validation." });
+        return res.json({ ...result, reason: "Marketplace taxonomy validation requires credentialed access for this request path." });
       }
       res.json(result);
     } catch (error) {
@@ -947,7 +963,7 @@ export async function registerRoutes(
   app.get("/api/ebay/item/:itemId", async (req, res) => {
     try {
       const detail = await getItemDetails(req.params.itemId);
-      if (!detail) return res.status(404).json({ message: "Item not found or EBAY_APP_ID not configured" });
+      if (!detail) return res.status(404).json({ message: "Item not found or live source temporarily unavailable" });
       res.json(detail);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch item" });

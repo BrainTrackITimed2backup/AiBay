@@ -8,7 +8,9 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "check:live-data": "bash ./scripts/no-mock-guard.sh",
+    "check:all": "npm run check && npm run check:live-data"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
