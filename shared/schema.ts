@@ -216,6 +216,21 @@ export const insertTemplateSchema = createInsertSchema(templates).omit({
 export type Template = typeof templates.$inferSelect;
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 
+// ─── AI Provider Metrics ─────────────────────────────────────────────────────
+export const aiProviderMetrics = pgTable("ai_provider_metrics", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  taskType: text("task_type").notNull(),
+  latencyMs: integer("latency_ms").notNull().default(0),
+  retryCount: integer("retry_count").notNull().default(0),
+  success: boolean("success").notNull().default(true),
+  errorCode: text("error_code"),
+  estimatedTokens: integer("estimated_tokens").notNull().default(0),
+  quotaRemaining: integer("quota_remaining").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ─── Request/Response Schemas ────────────────────────────────────────────────
 export const generateRequestSchema = z.object({
   productUrl: z.string().url("Must be a valid URL"),

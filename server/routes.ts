@@ -5,6 +5,7 @@ import { api } from "@shared/routes";
 import { scrapeProduct } from "./services/scraper";
 import {
   generateListingContent, calculateROAS, analyzeExistingListing, generateBulkListings,
+  getLastAIRouteMeta,
 } from "./services/aiRouter";
 import { runArena, runFullAuto, scoreFullListing, MODEL_REGISTRY } from "./services/modelArena";
 import { checkVero, checkVeroBatch } from "./services/veroChecker";
@@ -65,7 +66,7 @@ export async function registerRoutes(
         rawData: scrapedData,
       });
 
-      res.json(listing);
+      res.json({ ...listing, aiMeta: getLastAIRouteMeta() });
     } catch (error) {
       console.error("Generation failed:", error);
       res.status(500).json({ message: error instanceof Error ? error.message : "Internal Server Error" });
@@ -155,7 +156,7 @@ export async function registerRoutes(
       // Save search history
       await storage.createKeywordSearch({ query: keyword, marketplace, results: analysis }).catch(() => {});
 
-      res.json(analysis);
+      res.json({ ...analysis, aiMeta: getLastAIRouteMeta() });
     } catch (error) {
       console.error("Market research error:", error);
       res.status(500).json({ message: error instanceof Error ? error.message : "Error" });
