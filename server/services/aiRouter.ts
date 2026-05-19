@@ -3,6 +3,9 @@
 // Endpoint: https://text.pollinations.ai/openai/v1 (OpenAI-compatible)
 
 import axios from "axios";
+import { db } from "../db";
+import { aiProviderMetrics } from "@shared/schema";
+import { and, eq, gte, sql } from "drizzle-orm";
 
 // Pollinations.AI — 100% free, zero API key
 // Correct endpoint (Apr 2026): https://text.pollinations.ai/openai/v1
@@ -17,37 +20,84 @@ const MODELS = [
   "claude",          // Claude Sonnet
 ];
 
-async function callAI(prompt: string, jsonMode = true): Promise<string | null> {
-  // Try each model via direct HTTP (more reliable than SDK for Pollinations)
-  for (const model of MODELS) {
-    try {
-      const body: Record<string, unknown> = {
-        model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-      };
-      if (jsonMode) body.response_format = { type: "json_object" };
+export type AIErrorCode = "RATE_LIMIT" | "TIMEOUT" | "INVALID_OUTPUT" | "PROVIDER_DOWN";
+type TaskType = "listing" | "keywords" | "analysis";
+type ProviderName = "openrouter" | "groq" | "local";
+type AIRouteMeta = { provider: ProviderName; model: string; latencyMs: number; retryCount: number; taskType: TaskType };
+let lastRouteMeta: AIRouteMeta | null = null;
+export const getLastAIRouteMeta = () => lastRouteMeta;
 
-      const resp = await axios.post(
-        `${POLLINATIONS_BASE}/chat/completions`,
-        body,
-        {
-          timeout: 25000,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-      const content = resp.data?.choices?.[0]?.message?.content;
-      if (!content) throw new Error("Empty response");
-      // Strip markdown code fences if present
-      const cleaned = content.replace(/^```[\w]*\n?/gm, "").replace(/```$/gm, "").trim();
-      console.log(`[AI] ${model} succeeded`);
-      return cleaned;
+interface ProviderAdapter { name: ProviderName; models: string[]; invoke(prompt: string, jsonMode: boolean, taskType: TaskType): Promise<string>; }
+class ProviderError extends Error { constructor(public code: AIErrorCode, message: string) { super(message); } }
+const classifyError = (error: unknown): ProviderError => {
+  const status = (error as any)?.response?.status;
+  if (status === 429) return new ProviderError("RATE_LIMIT", "Provider rate-limited");
+  if ((error as any)?.code === "ECONNABORTED") return new ProviderError("TIMEOUT", "Provider timeout");
+  if (status >= 500) return new ProviderError("PROVIDER_DOWN", "Provider unavailable");
+  return new ProviderError("INVALID_OUTPUT", error instanceof Error ? error.message : "Invalid provider response");
+};
+const isRetryable = (code: AIErrorCode) => code === "RATE_LIMIT" || code === "TIMEOUT" || code === "PROVIDER_DOWN";
+
+class OpenRouterAdapter implements ProviderAdapter {
+  name: ProviderName = "openrouter";
+  models = MODELS;
+  async invoke(prompt: string, jsonMode: boolean): Promise<string> {
+    for (const model of this.models) {
+      try {
+        const body: Record<string, unknown> = { model, messages: [{ role: "user", content: prompt }], temperature: 0.3 };
+        if (jsonMode) body.response_format = { type: "json_object" };
+        const resp = await axios.post(`${POLLINATIONS_BASE}/chat/completions`, body, { timeout: 25000, headers: { "Content-Type": "application/json" } });
+        const content = resp.data?.choices?.[0]?.message?.content;
+        if (!content) throw new ProviderError("INVALID_OUTPUT", "Empty response");
+        return content.replace(/^```[\w]*\n?/gm, "").replace(/```$/gm, "").trim();
+      } catch (e) { throw classifyError(e); }
+    }
+    throw new ProviderError("PROVIDER_DOWN", "No model available");
+  }
+}
+class GroqAdapter extends OpenRouterAdapter { name: ProviderName = "groq"; models = ["llama-3.3-70b-versatile"]; }
+class LocalAdapter extends OpenRouterAdapter { name: ProviderName = "local"; models = ["mistral"]; }
+const providers: ProviderAdapter[] = [new OpenRouterAdapter(), new GroqAdapter(), new LocalAdapter()];
+
+async function getProviderScore(name: ProviderName, taskType: TaskType, expectedTokens: number): Promise<number> {
+  const since = new Date(Date.now() - 60 * 60 * 1000);
+  const rows = await db.select({
+    successRate: sql<number>`coalesce(avg(case when ${aiProviderMetrics.success}=true then 1 else 0 end), 0.75)`,
+    avgLatency: sql<number>`coalesce(avg(${aiProviderMetrics.latencyMs}), 900)`,
+    quotaRemaining: sql<number>`coalesce(max(${aiProviderMetrics.quotaRemaining}), 1000)`,
+  }).from(aiProviderMetrics).where(and(eq(aiProviderMetrics.provider, name), gte(aiProviderMetrics.createdAt, since)));
+  const m = rows[0] || { successRate: 0.75, avgLatency: 900, quotaRemaining: 1000 };
+  const costWeight = taskType === "listing" ? 1.2 : 0.8;
+  return (m.successRate * 100) - (m.avgLatency / 25) + (m.quotaRemaining / 100) - (expectedTokens / 1000) * costWeight;
+}
+
+async function persistMetric(meta: AIRouteMeta, success: boolean, quotaRemaining = 1000) {
+  await db.insert(aiProviderMetrics).values({
+    provider: meta.provider, model: meta.model, taskType: meta.taskType, latencyMs: meta.latencyMs,
+    retryCount: meta.retryCount, success, errorCode: success ? null : "PROVIDER_DOWN", estimatedTokens: 600, quotaRemaining,
+  }).catch(() => {});
+}
+
+async function callAI(prompt: string, jsonMode = true, taskType: TaskType = "analysis"): Promise<string | null> {
+  const expectedTokens = Math.ceil(prompt.length / 4);
+  const ranked = await Promise.all(providers.map(async p => ({ p, score: await getProviderScore(p.name, taskType, expectedTokens) })));
+  ranked.sort((a, b) => b.score - a.score);
+  let retryCount = 0;
+  for (const { p } of ranked) {
+    try {
+      const t0 = Date.now();
+      const content = await p.invoke(prompt, jsonMode, taskType);
+      lastRouteMeta = { provider: p.name, model: p.models[0], latencyMs: Date.now() - t0, retryCount, taskType };
+      await persistMetric(lastRouteMeta, true);
+      return content;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.warn(`[AI] ${model} failed: ${msg}`);
+      const coded = error instanceof ProviderError ? error : classifyError(error);
+      retryCount += isRetryable(coded.code) ? 1 : 0;
+      lastRouteMeta = { provider: p.name, model: p.models[0], latencyMs: 0, retryCount, taskType };
+      await persistMetric(lastRouteMeta, false);
+      if (!isRetryable(coded.code)) break;
     }
   }
-  console.warn("[AI] All Pollinations models failed, using template fallback.");
   return null;
 }
 
@@ -167,7 +217,7 @@ RULES:
 OUTPUT: Valid JSON only (no markdown):
 {"title":"...","htmlDescription":"...","bullets":["..."],"keywords":["..."],"itemSpecifics":[{"name":"...","value":"..."}]}`;
 
-  const raw = await callAI(prompt);
+  const raw = await callAI(prompt, true, "listing");
 
   if (raw) {
     try {
@@ -202,7 +252,7 @@ export async function generateKeywordSuggestions(keyword: string): Promise<{ key
   const prompt = `Generate 12 high-volume eBay search keyword variations for: "${keyword}"
 Focus on: buyer intent phrases, model/spec variations, long-tail keywords, related accessories, condition variations.
 Output JSON: {"keywords":["..."],"searchVolume":{"keyword":"High/Medium/Low"},"titleTemplate":"[Brand] ${keyword} [Model] - [Condition]"}`;
-  const raw = await callAI(prompt);
+  const raw = await callAI(prompt, true, "keywords");
   try { if (raw) return JSON.parse(raw); } catch {}
   const base = keyword.split(" ").filter(w => w.length > 2);
   return {
@@ -216,7 +266,7 @@ export async function generateScanVerdicts(items: { title: string; price: number
   const prompt = `Analyze these eBay listings and give a 1-sentence profit verdict for each.
 Items: ${JSON.stringify(top)}
 Output JSON: {"0":"verdict for item 0","1":"verdict","2":"verdict","3":"verdict","4":"verdict"}`;
-  const raw = await callAI(prompt);
+  const raw = await callAI(prompt, true, "analysis");
   try { if (raw) return JSON.parse(raw); } catch {}
   return Object.fromEntries(top.map((_, i) => [String(i), "Review pricing and competition before listing."]));
 }
@@ -225,7 +275,7 @@ export async function scoreTitleSEO(title: string): Promise<{ score: number; sug
   const prompt = `Analyze this eBay title for SEO quality: "${title}"
 Score 0-100. Give 3 specific improvement suggestions. Provide an improved version.
 Output JSON: {"score":75,"suggestions":["...","...","..."],"improvedTitle":"..."}`;
-  const raw = await callAI(prompt);
+  const raw = await callAI(prompt, true, "analysis");
   try { if (raw) return JSON.parse(raw); } catch {}
   const len = title.length;
   return {
@@ -246,7 +296,7 @@ export async function extractItemSpecifics(
 Title: "${title}"
 ${description ? `Description: ${description.slice(0, 400)}` : ""}
 Output JSON: {"specifics":[{"name":"Brand","value":"..."},{"name":"Model","value":"..."},...]}`;
-  const raw = await callAI(prompt);
+  const raw = await callAI(prompt, true, "analysis");
   try {
     if (raw) {
       const p = JSON.parse(raw);
@@ -317,7 +367,7 @@ export async function analyzeExistingListing(url: string): Promise<{
 URL: ${url}
 Since you cannot browse URLs, generate a professional analysis framework with common eBay listing issues.
 Output JSON: {"seoScore":72,"titleScore":65,"descriptionScore":78,"issues":["Title too short","Missing item specifics","No condition keywords"],"improvements":["Add model number to title","Include 6+ bullet points","Add UPC/EAN barcode"],"estimatedRank":"Page 2-3"}`;
-  const raw = await callAI(prompt);
+  const raw = await callAI(prompt, true, "analysis");
   try { if (raw) return JSON.parse(raw); } catch {}
   return {
     seoScore: 68, titleScore: 62, descriptionScore: 72,
